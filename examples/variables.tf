@@ -1,4 +1,10 @@
-variable "name" {
-  type        = string
-  description = "Describe what this variable is used for."
+
+variable "project" {
+  type    = string
+  default = ""
+}
+
+variable "notification_channels" {
+  type    = list(string)
+  default = []
 }
