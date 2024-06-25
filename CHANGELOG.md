@@ -12,6 +12,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.1] - 2024-06-25
 
 ### Fixed
+
   - Fixed Google provider minimum required version.
 
 ## [0.1.0] - 2024-06-19
