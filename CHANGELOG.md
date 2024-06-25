@@ -18,6 +18,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.0] - 2024-06-19
 
 ### Added
+
   - Add support for Cloud SQL monitoring:
     - CPU utilization
     - Memory utilization
