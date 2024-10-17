@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2024-10-17
+
+  - CHANGED: increase default alert thresholds for Cloud SQL CPU, memory and disk utilization.
 
 ## [0.1.1] - 2024-06-25
 
