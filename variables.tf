@@ -20,13 +20,12 @@ variable "cloud_sql" {
     notification_channels = optional(list(string), [])
     instances = optional(map(object({
       cpu_utilization = optional(list(object({
-        severity         = optional(string, "CRITICAL"),
+        severity         = optional(string, "WARNING"),
         threshold        = optional(number, 0.90)
         alignment_period = optional(string, "120s")
         duration         = optional(string, "300s")
         })), [
         {
-          severity  = "WARNING",
           threshold = 0.85,
           duration  = "1200s",
         },
@@ -38,29 +37,27 @@ variable "cloud_sql" {
         }
       ])
       memory_utilization = optional(list(object({
-        severity         = optional(string, "CRITICAL"),
+        severity         = optional(string, "WARNING"),
         threshold        = optional(number, 0.90)
         alignment_period = optional(string, "300s")
         duration         = optional(string, "300s")
         })), [
         {
           severity  = "WARNING",
-          threshold = 0.80,
         },
         {
           severity  = "CRITICAL",
-          threshold = 0.90,
+          threshold = 0.95,
         }
       ])
       disk_utilization = optional(list(object({
-        severity         = optional(string, "CRITICAL"),
-        threshold        = optional(number, 0.90)
+        severity         = optional(string, "WARNING"),
+        threshold        = optional(number, 0.85)
         alignment_period = optional(string, "300s")
         duration         = optional(string, "600s")
         })), [
         {
           severity  = "WARNING",
-          threshold = 0.85,
         },
         {
           severity  = "CRITICAL",
