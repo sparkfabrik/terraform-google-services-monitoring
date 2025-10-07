@@ -8,6 +8,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-10-07
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.2.0...0.3.0)
+
+### Changed
+
+- Add kyverno alert log.
 - Update module documentation.
 
 ## [0.2.0] - 2024-10-17
