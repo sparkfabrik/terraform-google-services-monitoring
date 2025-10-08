@@ -69,6 +69,7 @@ variable "cloud_sql" {
 variable "kyverno" {
   description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
   type = object({
+    enabled               = optional(bool, true)
     cluster_name          = string
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
@@ -76,13 +77,8 @@ variable "kyverno" {
     # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts
     logmatch_notification_rate_limit = optional(string, "300s")
     alert_documentation              = optional(string, null)
-    # If true, use a metric threshold alert instead of log match alert otherwise use log match alert
-    use_metric_threshold    = optional(bool, false)
-    metric_threshold_count  = optional(number, 2)
-    metric_lookback_minutes = optional(number, 1)
-    auto_close_seconds      = optional(number, 3600)
-    enabled                 = optional(bool, true)
-    filter_extra            = optional(string, "")
-    namespace               = optional(string, "kyverno")
+    auto_close_seconds               = optional(number, 3600)
+    filter_extra                     = optional(string, "")
+    namespace                        = optional(string, "kyverno")
   })
 }
