@@ -46,7 +46,7 @@ module "example" {
   version = ">= 0.1.0"
 
   notification_channels = var.notification_channels
-  project               = var.project
+  project_id            = var.project_id
   cloud_sql             = local.cloud_sql
   kyverno = {
     cluster_name           = "test-cluster"
