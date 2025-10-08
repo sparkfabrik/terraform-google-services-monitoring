@@ -1,7 +1,7 @@
 locals {
   kyverno_project_id            = var.kyverno.project_id != null ? var.kyverno.project_id : var.project_id
   alert_documentation           = var.kyverno.alert_documentation != null ? var.kyverno.alert_documentation : "Kyverno controllers produced ERROR logs in namespace ${var.kyverno.namespace}."
-  kyverno_notification_channels = length(var.kyverno.notification_channels) > 0 ? var.kyverno.notification_channels : var.notification_channels
+  kyverno_notification_channels = var.kyverno.notification_enabled ? (length(var.kyverno.notification_channels) > 0 ? var.kyverno.notification_channels : var.notification_channels) : []
 
   kyverno_log_filter = <<-EOT
     resource.type="k8s_container"

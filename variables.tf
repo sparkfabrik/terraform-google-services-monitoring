@@ -14,6 +14,7 @@ variable "cloud_sql" {
   type = object({
     project_id            = optional(string, null)
     auto_close            = optional(string, "86400s") # default 24h
+    notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     instances = optional(map(object({
       cpu_utilization = optional(list(object({
@@ -70,6 +71,7 @@ variable "kyverno" {
   type = object({
     cluster_name          = string
     project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts
     logmatch_notification_rate_limit = optional(string, "300s")

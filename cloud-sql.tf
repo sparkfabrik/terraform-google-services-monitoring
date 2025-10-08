@@ -6,7 +6,7 @@ locals {
   cloud_sql_project = var.cloud_sql.project_id != null ? var.cloud_sql.project_id : var.project_id
 
   # Use the cloud_sql notification channels for if not specified in the configuration.
-  cloud_sql_notification_channels = length(var.cloud_sql.notification_channels) > 0 ? var.cloud_sql.notification_channels : var.notification_channels
+  cloud_sql_notification_channels = var.cloud_sql.notification_enabled ? (length(var.cloud_sql.notification_channels) > 0 ? var.cloud_sql.notification_channels : var.notification_channels) : []
 
   cloud_sql_cpu_utilization = {
     for item in flatten(
