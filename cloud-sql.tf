@@ -3,13 +3,10 @@
 # ----------------------
 locals {
   # Use the cloud_sql project if specified, otherwise use the project.
-  cloud_sql_project = var.cloud_sql.project != null ? var.cloud_sql.project : var.project
+  cloud_sql_project = var.cloud_sql.project_id != null ? var.cloud_sql.project_id : var.project_id
 
   # Use the cloud_sql notification channels for if not specified in the configuration.
-  cloud_sql_notification_channels = length(var.cloud_sql.notification_channels) > 0 ? var.cloud_sql.notification_channels : var.notification_channels
-
-  # Use the cloud_sql auto_close if specified, otherwise use the auto_close.
-  cloud_sql_auto_close = var.cloud_sql.auto_close != null ? var.cloud_sql.auto_close : var.auto_close
+  cloud_sql_notification_channels = var.cloud_sql.notification_enabled ? (length(var.cloud_sql.notification_channels) > 0 ? var.cloud_sql.notification_channels : var.notification_channels) : []
 
   cloud_sql_cpu_utilization = {
     for item in flatten(
@@ -22,7 +19,7 @@ locals {
             },
             cpu_utilization
           )
-        ] 
+        ]
       ]
     ) : "${item.instance}--${item.severity}--${item.threshold}" => item
   }
@@ -38,10 +35,10 @@ locals {
             },
             memory_utilization
           )
-        ] 
+        ]
       ]
     ) : "${item.instance}--${item.severity}--${item.threshold}" => item
-  }  
+  }
 
   cloud_sql_disk_utilization = {
     for item in flatten(
@@ -54,10 +51,10 @@ locals {
             },
             disk_utilization
           )
-        ] 
+        ]
       ]
     ) : "${item.instance}--${item.severity}--${item.threshold}" => item
-  }  
+  }
 }
 
 # ----------------------
@@ -67,7 +64,7 @@ resource "google_monitoring_alert_policy" "cloud_sql_cpu_utilization" {
   for_each = local.cloud_sql_cpu_utilization
 
   display_name = "${local.cloud_sql_project} ${each.value.instance} - CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
-  combiner     = "OR"  
+  combiner     = "OR"
   severity     = each.value.severity
 
   conditions {
@@ -87,7 +84,7 @@ resource "google_monitoring_alert_policy" "cloud_sql_cpu_utilization" {
     display_name = "${local.cloud_sql_project} ${each.value.instance} - CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
   }
   alert_strategy {
-    auto_close = local.cloud_sql_auto_close
+    auto_close = var.cloud_sql.auto_close
   }
   notification_channels = local.cloud_sql_notification_channels
 }
@@ -117,7 +114,7 @@ resource "google_monitoring_alert_policy" "cloud_sql_memory_utilization" {
   }
 
   alert_strategy {
-    auto_close = local.cloud_sql_auto_close
+    auto_close = var.cloud_sql.auto_close
   }
 
   notification_channels = local.cloud_sql_notification_channels
@@ -149,7 +146,7 @@ resource "google_monitoring_alert_policy" "cloud_sql_disk_utilization" {
   }
 
   alert_strategy {
-    auto_close = local.cloud_sql_auto_close
+    auto_close = var.cloud_sql.auto_close
   }
   notification_channels = local.cloud_sql_notification_channels
 }

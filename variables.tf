@@ -1,22 +1,20 @@
-variable "project" {
-  type    = string
-  default = null
+variable "project_id" {
+  description = "The Google Cloud project ID where logging exclusions will be created"
+  type        = string
 }
 
 variable "notification_channels" {
-  type    = list(string)
-  default = []
-}
-
-variable "auto_close" {
-  type    = string
-  default = "86400s" # 24h
+  description = "List of notification channel IDs to notify when an alert is triggered"
+  type        = list(string)
+  default     = []
 }
 
 variable "cloud_sql" {
+  description = "Configuration for Cloud SQL monitoring alerts. Supports customization of project, auto-close timing, notification channels, and per-instance alert thresholds for CPU, memory, and disk utilization."
   type = object({
-    project               = optional(string, null)
-    auto_close            = optional(string, null)
+    project_id            = optional(string, null)
+    auto_close            = optional(string, "86400s") # default 24h
+    notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     instances = optional(map(object({
       cpu_utilization = optional(list(object({
@@ -30,9 +28,9 @@ variable "cloud_sql" {
           duration  = "1200s",
         },
         {
-          severity  = "CRITICAL",
-          threshold = 1,
-          duration  = "300s",
+          severity         = "CRITICAL",
+          threshold        = 1,
+          duration         = "300s",
           alignment_period = "60s",
         }
       ])
@@ -43,7 +41,7 @@ variable "cloud_sql" {
         duration         = optional(string, "300s")
         })), [
         {
-          severity  = "WARNING",
+          severity = "WARNING",
         },
         {
           severity  = "CRITICAL",
@@ -57,13 +55,30 @@ variable "cloud_sql" {
         duration         = optional(string, "600s")
         })), [
         {
-          severity  = "WARNING",
+          severity = "WARNING",
         },
         {
           severity  = "CRITICAL",
-          threshold = 0.95,          
+          threshold = 0.95,
         }
       ])
     })), {})
+  })
+}
+
+variable "kyverno" {
+  description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
+  type = object({
+    enabled               = optional(bool, true)
+    cluster_name          = string
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts
+    logmatch_notification_rate_limit = optional(string, "300s")
+    alert_documentation              = optional(string, null)
+    auto_close_seconds               = optional(number, 3600)
+    filter_extra                     = optional(string, "")
+    namespace                        = optional(string, "kyverno")
   })
 }
