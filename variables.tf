@@ -70,7 +70,7 @@ variable "kyverno" {
   description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
   type = object({
     enabled               = optional(bool, true)
-    cluster_name          = optional(string, null)
+    cluster_name          = optional(string, "")
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
@@ -83,11 +83,11 @@ variable "kyverno" {
   })
 }
 
-variable "certificate" {
+variable "cert_manager_issuer" {
   description = "Configuration for cert-manager missing issuer log alert. Allows customization of project, cluster, namespace, notification channels, alert documentation, enablement, extra filters, auto-close timing, and notification rate limiting."
   type = object({
     enabled                          = optional(bool, true)
-    cluster_name                     = optional(string, null)
+    cluster_name                     = optional(string, "")
     project_id                       = optional(string, null)
     namespace                        = optional(string, "cert-manager")
     notification_enabled             = optional(bool, true)
