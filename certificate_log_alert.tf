@@ -28,9 +28,9 @@ locals {
       )
     )
     AND (
-      textPayload=~"Referenced \\"(Issuer|ClusterIssuer)\\" not found"
-      OR jsonPayload.message=~"Referenced \\"(Issuer|ClusterIssuer)\\" not found"
-      OR jsonPayload.note=~"Referenced \\"(Issuer|ClusterIssuer)\\" not found"
+      textPayload=~"Referenced \"(Issuer|ClusterIssuer)\" not found"
+      OR jsonPayload.message=~"Referenced \"(Issuer|ClusterIssuer)\" not found"
+      OR jsonPayload.note=~"Referenced \"(Issuer|ClusterIssuer)\" not found"
     )
     ${trimspace(var.certificate.filter_extra)}
   EOT
