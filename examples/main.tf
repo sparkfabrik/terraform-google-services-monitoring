@@ -49,13 +49,17 @@ module "example" {
   project_id            = var.project_id
   cloud_sql             = local.cloud_sql
   kyverno = {
-    cluster_name           = "test-cluster"
-    enabled                = true
-    use_metric_threshold   = true
-    metric_threshold_count = 5
-    notification_channels  = []
+    cluster_name          = "test-cluster"
+    enabled               = true
+    notification_channels = []
     # Optional filter for log entries, exclude known non-actionable messages
     # e.g., "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
     filter_extra = "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
+  }
+  cert_manager = {
+    cluster_name          = "test-cluster"
+    namespace             = "cert-manager"
+    enabled               = true
+    notification_channels = []
   }
 }
