@@ -21,6 +21,7 @@ resource "google_monitoring_alert_policy" "kyverno_logmatch_alert" {
   count = (
     var.kyverno.enabled
     && trimspace(var.kyverno.cluster_name) != ""
+    && var.kyverno.cluster_name != null
   ) ? 1 : 0
 
   display_name = "Kyverno controllers ERROR logs (namespace=${var.kyverno.namespace})"

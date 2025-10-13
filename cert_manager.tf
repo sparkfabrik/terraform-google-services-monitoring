@@ -40,6 +40,7 @@ resource "google_monitoring_alert_policy" "cert_manager_logmatch_alert" {
   count = (
     var.cert_manager.enabled
     && trimspace(var.cert_manager.cluster_name) != ""
+    && var.cert_manager.cluster_name != null
   ) ? 1 : 0
 
   display_name = "cert-manager missing Issuer/ClusterIssuer (cluster=${var.cert_manager.cluster_name}, namespace=${var.cert_manager.namespace})"
