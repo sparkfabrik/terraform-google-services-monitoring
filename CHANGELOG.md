@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-10-13
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.3.0...0.4.0)
+
+### changed
+
+- Rename tf file from `cloud-sql.tf` to `cloud_sql.tf`.
+- Add cert-manager missing issuer alert log.
+
 ## [0.3.0] - 2025-10-07
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.2.0...0.3.0)

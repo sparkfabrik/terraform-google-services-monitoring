@@ -13,7 +13,9 @@ Supported services:
 - Kyverno
 
   - Error logs for admission-controller, background-controller, cleanup-controller, reports-controller
-  - Metric threshold (optional)
+
+- cert-manager
+  - Error logs for cert-manager controller when an Issuer or ClusterIssuer is missing
 
 <!-- BEGIN_TF_DOCS -->
 ## Providers

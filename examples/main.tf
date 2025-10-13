@@ -58,4 +58,13 @@ module "example" {
     # e.g., "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
     filter_extra = "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
   }
+  cert_manager_issuer = {
+    cluster_name          = "test-cluster"
+    namespace             = "cert-manager"
+    enabled               = true
+    notification_channels = []
+    # Optional filter for log entries, exclude known non-actionable messages
+    # e.g., "-textPayload:\"some known non-actionable message\""
+    filter_extra = ""
+  }
 }
