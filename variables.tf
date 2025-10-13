@@ -97,4 +97,8 @@ variable "cert_manager" {
     auto_close_seconds               = optional(number, 3600)
     filter_extra                     = optional(string, "")
   })
+  default = {
+    enabled      = false
+    cluster_name = ""
+  }
 }
