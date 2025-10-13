@@ -4,7 +4,7 @@ locals {
     var.cert_manager.alert_documentation != null
     ? var.cert_manager.alert_documentation
     : <<-EOT
-      cert-manager is reporting that an Issuer or ClusterIssuer resource referenced by a cert_manager cannot be found. This may indicate that the Issuer/ClusterIssuer has been deleted or is otherwise unavailable.
+      cert-manager is reporting that an Issuer or ClusterIssuer resource referenced by a Certificate cannot be found. This may indicate that the Issuer/ClusterIssuer has been deleted or is otherwise unavailable.
     EOT
   )
   cert_manager_notification_channels = var.cert_manager.notification_enabled ? (length(var.cert_manager.notification_channels) > 0 ? var.cert_manager.notification_channels : var.notification_channels) : []
