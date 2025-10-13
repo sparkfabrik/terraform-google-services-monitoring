@@ -15,6 +15,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### changed
 
 - Rename tf file from `cloud-sql.tf` to `cloud_sql.tf`.
+- Rename tf file from `kyverno_log_alert.tf` to `kyverno.tf`.
 - Add cert-manager missing issuer alert log.
 
 ## [0.3.0] - 2025-10-07

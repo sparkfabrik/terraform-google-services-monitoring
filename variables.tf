@@ -83,7 +83,7 @@ variable "kyverno" {
   })
 }
 
-variable "cert_manager_issuer" {
+variable "cert_manager" {
   description = "Configuration for cert-manager missing issuer log alert. Allows customization of project, cluster, namespace, notification channels, alert documentation, enablement, extra filters, auto-close timing, and notification rate limiting."
   type = object({
     enabled                          = optional(bool, true)
