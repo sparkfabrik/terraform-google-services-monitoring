@@ -8,10 +8,43 @@ locals {
     resource.labels.project_id="${local.kyverno_project_id}"
     resource.labels.cluster_name="${var.kyverno.cluster_name}"
     resource.labels.namespace_name="${var.kyverno.namespace}"
-    severity>=ERROR
     (
       labels."k8s-pod/app_kubernetes_io/component"=~"(admission-controller|background-controller|cleanup-controller|reports-controller)"
-      OR resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
+      OR
+      resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
+    )
+    textPayload=~(
+        "internal error"
+        OR "failed calling webhook"
+        OR "timeout"
+        OR "client-side throttling"
+        OR "failed to run warmup"
+        OR "schema not found"
+        OR "list resources failed"
+        OR "failed to watch resource"
+        OR "context deadline exceeded"
+        OR "i/o timeout"
+        OR "is forbidden"
+        OR "cannot list resource"
+        OR "cannot watch resource"
+        OR "RBAC.*denied"
+        OR "failed to start watcher"
+        OR "failed to acquire lease"
+        OR "leader election lost"
+        OR "unable to update .*WebhookConfiguration"
+        OR "failed to sync"
+        OR "dropping request"
+        OR "failed to load certificate"
+        OR "Failed to update lock"
+        OR "the object has been modified"
+        OR "no matches for kind"
+        OR "the server could not find the requested resource"
+        OR "Too Many Requests"
+        OR "x509"
+        OR "is invalid:"
+        OR "connection refused"
+        OR "fatal error"
+        OR "panic"
     )
     ${trimspace(var.kyverno.filter_extra)}
   EOT
