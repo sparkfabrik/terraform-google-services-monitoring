@@ -35,7 +35,7 @@ locals {
         OR "(?i)failed to sync"
         OR "(?i)dropping request"
         OR "(?i)failed to load certificate"
-        OR "(?i)Failed to update lock"
+        OR "(?i)failed to update lock"
         OR "(?i)the object has been modified"
         OR "(?i)no matches for kind"
         OR "(?i)the server could not find the requested resource"
