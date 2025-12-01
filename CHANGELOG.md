@@ -8,17 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.5.0] - 2025-11-28
+## [0.5.0] - 2025-12-01
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.4.0...0.5.0)
 
 ### Changed
 
-- Kyverno log alert filter updated with explicit error patterns.
+- refs platform/board#3935: Kyverno log alert filter updated with explicit error patterns.
 
 ### Breaking change
 
 - The previous `severity>=ERROR` filter for Kyverno log alerts has been removed and replaced with explicit text pattern matching. This significantly alters alert behavior, as alerts are now triggered based on specific error patterns rather than severity level. Please review and update your alert expectations accordingly.
+
 ## [0.4.0] - 2025-10-13
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.3.0...0.4.0)
