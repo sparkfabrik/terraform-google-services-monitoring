@@ -8,10 +8,43 @@ locals {
     resource.labels.project_id="${local.kyverno_project_id}"
     resource.labels.cluster_name="${var.kyverno.cluster_name}"
     resource.labels.namespace_name="${var.kyverno.namespace}"
-    severity>=ERROR
     (
       labels."k8s-pod/app_kubernetes_io/component"=~"(admission-controller|background-controller|cleanup-controller|reports-controller)"
-      OR resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
+      OR
+      resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
+    )
+    textPayload=~(
+        "(?i)internal error"
+        OR "(?i)failed calling webhook"
+        OR "(?i)timeout"
+        OR "(?i)client-side throttling"
+        OR "(?i)failed to run warmup"
+        OR "(?i)schema not found"
+        OR "(?i)list resources failed"
+        OR "(?i)failed to watch resource"
+        OR "(?i)context deadline exceeded"
+        OR "(?i)i/o timeout"
+        OR "(?i)is forbidden"
+        OR "(?i)cannot list resource"
+        OR "(?i)cannot watch resource"
+        OR "(?i)RBAC.*denied"
+        OR "(?i)failed to start watcher"
+        OR "(?i)failed to acquire lease"
+        OR "(?i)leader election lost"
+        OR "(?i)unable to update .*WebhookConfiguration"
+        OR "(?i)failed to sync"
+        OR "(?i)dropping request"
+        OR "(?i)failed to load certificate"
+        OR "(?i)failed to update lock"
+        OR "(?i)the object has been modified"
+        OR "(?i)no matches for kind"
+        OR "(?i)the server could not find the requested resource"
+        OR "(?i)Too Many Requests"
+        OR "(?i)x509"
+        OR "(?i)is invalid:"
+        OR "(?i)connection refused"
+        OR "(?i)fatal error"
+        OR "(?i)panic"
     )
     ${trimspace(var.kyverno.filter_extra)}
   EOT
