@@ -144,6 +144,6 @@ variable "typesense" {
         try(trimspace(var.typesense.container_checks.namespace), "") != ""
       )
     )
-    error_message = "When container_checks is provided, both 'cluster_name', 'app_name' and 'namespace' must be non-empty strings."
+    error_message = "When container_checks is provided, 'cluster_name', 'app_name', and 'namespace' must all be non-empty strings."
   }
 }
