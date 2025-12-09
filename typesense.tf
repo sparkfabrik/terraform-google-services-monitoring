@@ -105,4 +105,3 @@ resource "google_monitoring_alert_policy" "typesense_oom_killed" {
     }
   }
 }
-
