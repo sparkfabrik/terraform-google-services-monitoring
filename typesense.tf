@@ -3,8 +3,6 @@ locals {
   typesense_project = var.typesense.project_id != null ? var.typesense.project_id : var.project_id
 
   typesense_notification_channels = var.typesense.notification_enabled ? (length(var.typesense.notification_channels) > 0 ? var.typesense.notification_channels : var.notification_channels) : []
-
-  typesense_container_checks_enabled = var.typesense.enabled && var.typesense.container_checks != null
 }
 
 module "typesense_uptime_checks" {
