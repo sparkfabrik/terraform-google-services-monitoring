@@ -98,3 +98,52 @@ variable "cert_manager" {
     filter_extra                     = optional(string, "")
   })
 }
+
+variable "typesense" {
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts, OOM) in GKE. For container checks, 'app_name' refers to the Kubernetes 'app' label on the containers."
+  default = {}
+
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+
+    # Uptime checks configuration
+    uptime_checks_hosts = optional(map(object({
+      host = string
+      path = optional(string, "/readyz")
+    })), {})
+
+    # Container checks configuration (GKE)
+    container_checks = optional(object({
+      cluster_name = string
+      namespace    = string
+      app_name     = string
+      pod_restart = optional(object({
+        threshold        = optional(number, 1)
+        alignment_period = optional(string, "180s")
+        duration         = optional(string, "0s")
+      }), {})
+      oom_killed = optional(object({
+        notification_rate_limit = optional(string, "180s")
+        auto_close_seconds      = optional(number, 300)
+      }), {})
+    }), null)
+  })
+
+  validation {
+    condition = (
+      var.typesense.container_checks == null ? true :
+      (
+        try(var.typesense.container_checks.app_name, null) != null &&
+        try(trimspace(var.typesense.container_checks.app_name), "") != "" &&
+        try(var.typesense.container_checks.cluster_name, null) != null &&
+        try(trimspace(var.typesense.container_checks.cluster_name), "") != "" &&
+        try(var.typesense.container_checks.namespace, null) != null &&
+        try(trimspace(var.typesense.container_checks.namespace), "") != ""
+      )
+    )
+    error_message = "When container_checks is provided, both 'cluster_name', 'app_name' and 'namespace' must be non-empty strings."
+  }
+}
