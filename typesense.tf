@@ -70,7 +70,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
   }
 }
 
-# Alert: Container OOM Killed 
+# Alert: Container OOM Killed
 # This alert monitors logs for OOMKilled events in Typesense containers.
 # It triggers immediately when an OOM event is detected in the logs.
 resource "google_monitoring_alert_policy" "typesense_oom_killed" {
