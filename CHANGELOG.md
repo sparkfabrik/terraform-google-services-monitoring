@@ -15,6 +15,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+
+### Added
 - refs platform/board#4052: add Typesense monitoring alerts and configuration for uptime checks and container checks
 
 ## [0.5.0] - 2025-12-01
