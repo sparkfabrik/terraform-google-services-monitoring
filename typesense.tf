@@ -34,12 +34,12 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
 
     condition_threshold {
       filter = <<-EOT
-        resource.type = "k8s_container"
-        AND resource.labels.project_id = "${local.typesense_project}"
-        AND resource.labels.cluster_name = "${var.typesense.container_checks.cluster_name}"
-        AND resource.labels.namespace_name = "${var.typesense.container_checks.namespace}"
-        AND metadata.user_labels.app = "${var.typesense.container_checks.app_name}"
-        AND metric.type = "kubernetes.io/container/restart_count"
+        resource.type="k8s_container"
+        AND resource.labels.project_id="${local.typesense_project}"
+        AND resource.labels.cluster_name="${var.typesense.container_checks.cluster_name}"
+        AND resource.labels.namespace_name="${var.typesense.container_checks.namespace}"
+        AND metadata.user_labels.app="${var.typesense.container_checks.app_name}"
+        AND metric.type="kubernetes.io/container/restart_count"
       EOT
 
       comparison      = "COMPARISON_GT"
