@@ -124,10 +124,11 @@ variable "typesense" {
         threshold        = optional(number, 0)
         alignment_period = optional(string, "120s")
         duration         = optional(string, "0s")
+        auto_close_seconds      = optional(number, 3600)
       }), {})
       oom_killed = optional(object({
         notification_rate_limit = optional(string, "120s")
-        auto_close_seconds      = optional(number, 300)
+        auto_close_seconds      = optional(number, 3600)
       }), {})
     }), null)
   })
