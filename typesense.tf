@@ -64,7 +64,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
   notification_channels = local.typesense_notification_channels
 
   alert_strategy {
-    auto_close = "86400s" # 24 hours
+    auto_close = "300s"
   }
 }
 
