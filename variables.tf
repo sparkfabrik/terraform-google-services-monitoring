@@ -122,12 +122,12 @@ variable "typesense" {
       app_name     = string
       pod_restart = optional(object({
         threshold        = optional(number, 0)
-        alignment_period = optional(string, "120s")
-        duration         = optional(string, "0s")
+        alignment_period = optional(number, 120)
+        duration         = optional(number, 0)
         auto_close_seconds      = optional(number, 3600)
       }), {})
       oom_killed = optional(object({
-        notification_rate_limit = optional(string, "120s")
+        notification_rate_limit = optional(number, 300)
         auto_close_seconds      = optional(number, 3600)
       }), {})
     }), null)

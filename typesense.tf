@@ -44,10 +44,10 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
 
       comparison      = "COMPARISON_GT"
       threshold_value = var.typesense.container_checks.pod_restart.threshold
-      duration        = var.typesense.container_checks.pod_restart.duration
+      duration        = "${var.typesense.container_checks.pod_restart.duration}s"
 
       aggregations {
-        alignment_period     = var.typesense.container_checks.pod_restart.alignment_period
+        alignment_period     = "${var.typesense.container_checks.pod_restart.alignment_period}s"
         per_series_aligner   = "ALIGN_DELTA"
         cross_series_reducer = "REDUCE_SUM"
         group_by_fields = [
@@ -99,7 +99,7 @@ resource "google_monitoring_alert_policy" "typesense_oom_killed" {
   alert_strategy {
     auto_close = "${var.typesense.container_checks.oom_killed.auto_close_seconds}s"
     notification_rate_limit {
-      period = var.typesense.container_checks.oom_killed.notification_rate_limit
+      period = "${var.typesense.container_checks.oom_killed.notification_rate_limit}s"
     }
   }
 }
