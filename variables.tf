@@ -100,47 +100,55 @@ variable "cert_manager" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts, OOM) in GKE. For container checks, 'app_name' refers to the Kubernetes 'app' label on the containers."
-  default = {}
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key), which corresponds to the Kubernetes 'app' label for container checks."
+  default     = {}
 
   type = object({
     enabled               = optional(bool, false)
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
+    cluster_name          = optional(string, null) # GKE cluster name for container checks
 
-    # Uptime checks configuration
-    uptime_checks_hosts = optional(map(object({
-      host = string
-      path = optional(string, "/readyz")
+    # Apps configuration - map keyed by app_name
+    apps = optional(map(object({
+      # Uptime check configuration (optional)
+      uptime_check = optional(object({
+        enabled = optional(bool, true)
+        host    = string
+        path    = optional(string, "/readyz")
+      }), null)
+
+      # Container check configuration for GKE (optional)
+      container_check = optional(object({
+        enabled   = optional(bool, true)
+        namespace = string
+        pod_restart = optional(object({
+          threshold          = optional(number, 0)
+          alignment_period   = optional(number, 60)
+          duration           = optional(number, 0)
+          auto_close_seconds = optional(number, 3600)
+        }), {})
+      }), null)
     })), {})
-
-    # Container checks configuration (GKE)
-    container_checks = optional(object({
-      cluster_name = string
-      namespace    = string
-      app_name     = string
-      pod_restart = optional(object({
-        threshold        = optional(number, 0)
-        alignment_period = optional(number, 60)
-        duration         = optional(number, 0)
-        auto_close_seconds      = optional(number, 3600)
-      }), {})
-    }), null)
   })
 
   validation {
-    condition = (
-      var.typesense.container_checks == null ? true :
-      (
-        try(var.typesense.container_checks.app_name, null) != null &&
-        try(trimspace(var.typesense.container_checks.app_name), "") != "" &&
-        try(var.typesense.container_checks.cluster_name, null) != null &&
-        try(trimspace(var.typesense.container_checks.cluster_name), "") != "" &&
-        try(var.typesense.container_checks.namespace, null) != null &&
-        try(trimspace(var.typesense.container_checks.namespace), "") != ""
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        trimspace(app_name) != "" &&
+        (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
+        (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true)
       )
+    ])
+    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check is provided, 'namespace' must be non-empty."
+  }
+
+  validation {
+    condition = (
+      length([for app_name, config in var.typesense.apps : app_name if config.container_check != null]) == 0 ||
+      (var.typesense.cluster_name != null && trimspace(var.typesense.cluster_name) != "")
     )
-    error_message = "When container_checks is provided, 'cluster_name', 'app_name', and 'namespace' must all be non-empty strings."
+    error_message = "When any app has container_check configured, 'cluster_name' must be provided at the typesense level."
   }
 }
