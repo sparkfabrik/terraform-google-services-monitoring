@@ -161,6 +161,6 @@ variable "ssl_alert" {
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     threshold_days        = optional(list(number), [15, 7])
-    user_label            = optional(map(string), {})
+    user_labels            = optional(map(string), {})
   })
 }

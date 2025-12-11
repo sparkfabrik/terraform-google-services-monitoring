@@ -30,8 +30,8 @@ resource "google_monitoring_alert_policy" "ssl_expiring_days" {
     display_name = "SSL certificate expiring soon (${each.value} days)"
   }
 
-  user_labels = var.ssl_alert.user_label
+  user_labels = var.ssl_alert.user_labels
 
   notification_channels = local.ssl_alert_notification_channels
-  project               = local.ssl_alert_project_id    
+  project               = local.ssl_alert_project_id
 }
