@@ -50,6 +50,7 @@ Supported services:
 | <a name="output_cloud_sql_cpu_utilization"></a> [cloud\_sql\_cpu\_utilization](#output\_cloud\_sql\_cpu\_utilization) | n/a |
 | <a name="output_cloud_sql_disk_utilization"></a> [cloud\_sql\_disk\_utilization](#output\_cloud\_sql\_disk\_utilization) | n/a |
 | <a name="output_cloud_sql_memory_utilization"></a> [cloud\_sql\_memory\_utilization](#output\_cloud\_sql\_memory\_utilization) | n/a |
+| <a name="output_ssl_alert_policy_names"></a> [ssl\_alert\_policy\_names](#output\_ssl\_alert\_policy\_names) | n/a |
 
 ## Resources
 
