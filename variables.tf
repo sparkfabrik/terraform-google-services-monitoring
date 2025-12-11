@@ -147,7 +147,7 @@ variable "typesense" {
   validation {
     condition = (
       length([for app_name, config in var.typesense.apps : app_name if config.container_check != null]) == 0 ||
-      (var.typesense.cluster_name != null && trimspace(var.typesense.cluster_name) != "")
+      try(trimspace(var.typesense.cluster_name), "") != ""
     )
     error_message = "When any app has container_check configured, 'cluster_name' must be provided at the typesense level."
   }
