@@ -8,6 +8,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+
+## [0.6.0] - 2025-12-10
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.5.0...0.6.0)
+
+### Changed
+
+
+### Added
+- refs platform/board#4052: add Typesense monitoring alerts and configuration for uptime checks and container checks
+
 ## [0.5.0] - 2025-12-01
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.4.0...0.5.0)

@@ -40,6 +40,7 @@ Supported services:
 | <a name="input_kyverno"></a> [kyverno](#input\_kyverno) | Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace. | <pre>object({<br/>    enabled               = optional(bool, true)<br/>    cluster_name          = string<br/>    project_id            = optional(string, null)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts<br/>    logmatch_notification_rate_limit = optional(string, "300s")<br/>    alert_documentation              = optional(string, null)<br/>    auto_close_seconds               = optional(number, 3600)<br/>    filter_extra                     = optional(string, "")<br/>    namespace                        = optional(string, "kyverno")<br/>  })</pre> | n/a | yes |
 | <a name="input_notification_channels"></a> [notification\_channels](#input\_notification\_channels) | List of notification channel IDs to notify when an alert is triggered | `list(string)` | `[]` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The Google Cloud project ID where logging exclusions will be created | `string` | n/a | yes |
+| <a name="input_typesense"></a> [typesense](#input\_typesense) | Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key). For container checks, the app name corresponds to the Kubernetes 'app' label; for apps with only uptime checks, this correspondence does not apply. | <pre>object({<br/>    enabled               = optional(bool, false)<br/>    project_id            = optional(string, null)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    cluster_name          = optional(string, null) # GKE cluster name for container checks<br/><br/>    # Apps configuration - map keyed by app_name<br/>    apps = optional(map(object({<br/>      # Uptime check configuration (optional)<br/>      uptime_check = optional(object({<br/>        enabled = optional(bool, true)<br/>        host    = string<br/>        path    = optional(string, "/readyz")<br/>      }), null)<br/><br/>      # Container check configuration for GKE (optional)<br/>      container_check = optional(object({<br/>        enabled   = optional(bool, true)<br/>        namespace = string<br/>        pod_restart = optional(object({<br/>          threshold          = optional(number, 0)<br/>          alignment_period   = optional(number, 60)<br/>          duration           = optional(number, 0)<br/>          auto_close_seconds = optional(number, 3600)<br/>        }), {})<br/>      }), null)<br/>    })), {})<br/>  })</pre> | `{}` | no |
 
 ## Outputs
 
@@ -58,9 +59,12 @@ Supported services:
 | [google_monitoring_alert_policy.cloud_sql_disk_utilization](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.cloud_sql_memory_utilization](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.kyverno_logmatch_alert](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
+| [google_monitoring_alert_policy.typesense_pod_restart](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 
 ## Modules
 
-No modules.
+| Name | Source | Version |
+|------|--------|---------|
+| <a name="module_typesense_uptime_checks"></a> [typesense\_uptime\_checks](#module\_typesense\_uptime\_checks) | github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring | 1.0.0 |
 
 <!-- END_TF_DOCS -->
