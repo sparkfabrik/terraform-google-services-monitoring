@@ -126,10 +126,6 @@ variable "typesense" {
         duration         = optional(number, 0)
         auto_close_seconds      = optional(number, 3600)
       }), {})
-      oom_killed = optional(object({
-        notification_rate_limit = optional(number, 300)
-        auto_close_seconds      = optional(number, 3600)
-      }), {})
     }), null)
   })
 

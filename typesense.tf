@@ -67,39 +67,3 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
     auto_close = "${var.typesense.container_checks.pod_restart.auto_close_seconds}s"
   }
 }
-
-# Alert: Container OOM Killed
-# This alert monitors logs for OOMKilled events in Typesense containers.
-# It triggers immediately when an OOM event is detected in the logs.
-resource "google_monitoring_alert_policy" "typesense_oom_killed" {
-  count = var.typesense.enabled && var.typesense.container_checks != null ? 1 : 0
-
-  project      = local.typesense_project
-  display_name = "Typesense OOM Killed (cluster=${var.typesense.container_checks.cluster_name}, namespace=${var.typesense.container_checks.namespace})"
-  combiner     = "OR"
-  enabled      = true
-
-  conditions {
-    display_name = "Log match: Typesense OOMKilled"
-
-    condition_matched_log {
-      filter = <<-EOT
-        resource.type="k8s_container"
-        resource.labels.project_id="${local.typesense_project}"
-        resource.labels.cluster_name="${var.typesense.container_checks.cluster_name}"
-        resource.labels.namespace_name="${var.typesense.container_checks.namespace}"
-        metadata.user_labels.app = "${var.typesense.container_checks.app_name}"
-        (textPayload:"OOMKilled" OR jsonPayload.reason="OOMKilled" OR jsonPayload.message=~"OOMKilled")
-      EOT
-    }
-  }
-
-  notification_channels = local.typesense_notification_channels
-
-  alert_strategy {
-    auto_close = "${var.typesense.container_checks.oom_killed.auto_close_seconds}s"
-    notification_rate_limit {
-      period = "${var.typesense.container_checks.oom_killed.notification_rate_limit}s"
-    }
-  }
-}
