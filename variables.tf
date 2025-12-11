@@ -100,7 +100,7 @@ variable "cert_manager" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key), which corresponds to the Kubernetes 'app' label for container checks."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key). For container checks, the app name corresponds to the Kubernetes 'app' label; for apps with only uptime checks, this correspondence does not apply."
   default     = {}
 
   type = object({
