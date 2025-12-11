@@ -23,7 +23,7 @@ module "typesense_uptime_checks" {
   source                      = "github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring?ref=1.0.0"
   gcp_project                 = local.typesense_project
   uptime_monitoring_host      = each.value.host
-  uptime_monitoring_path      = length(trimspace(each.value.path)) > 0 ? each.value.path : null
+  uptime_monitoring_path      = each.value.path
   alert_notification_channels = local.typesense_notification_channels
   alert_threshold_value       = 1
   uptime_check_period         = "900s"
