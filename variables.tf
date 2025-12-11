@@ -102,7 +102,6 @@ variable "cert_manager" {
 variable "typesense" {
   description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key). For container checks, the app name corresponds to the Kubernetes 'app' label; for apps with only uptime checks, this correspondence does not apply."
   default     = {}
-
   type = object({
     enabled               = optional(bool, false)
     project_id            = optional(string, null)
@@ -151,4 +150,17 @@ variable "typesense" {
     )
     error_message = "When any app has container_check configured, 'cluster_name' must be provided at the typesense level."
   }
+}
+
+variable "ssl_alert" {
+  description = "Configuration for SSL certificate expiration alerts. Allows customization of project, notification channels, alert thresholds, and user labels."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    threshold_days        = optional(list(number), [15, 7])
+    user_label            = optional(map(string), {})
+  })
 }
