@@ -100,7 +100,7 @@ variable "cert_manager" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key). For container checks, the app name corresponds to the Kubernetes 'app' label; for apps with only uptime checks, this correspondence does not apply."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key)."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -152,6 +152,56 @@ variable "typesense" {
   }
 }
 
+variable "litellm" {
+  description = "Configuration for LiteLLM monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key)."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    cluster_name          = optional(string, null)
+
+    apps = optional(map(object({
+      uptime_check = optional(object({
+        enabled = optional(bool, true)
+        host    = string
+        path    = optional(string, "/health/readiness")
+      }), null)
+
+      container_check = optional(object({
+        enabled   = optional(bool, true)
+        namespace = string
+        pod_restart = optional(object({
+          threshold          = optional(number, 0)
+          alignment_period   = optional(number, 60)
+          duration           = optional(number, 0)
+          auto_close_seconds = optional(number, 3600)
+        }), {})
+      }), null)
+    })), {})
+  })
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.litellm.apps : (
+        trimspace(app_name) != "" &&
+        (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
+        (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true)
+      )
+    ])
+    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check is provided, 'namespace' must be non-empty."
+  }
+
+  validation {
+    condition = (
+      length([for app_name, config in var.litellm.apps : app_name if config.container_check != null]) == 0 ||
+      try(trimspace(var.litellm.cluster_name), "") != ""
+    )
+    error_message = "When any app has container_check configured, 'cluster_name' must be provided at the litellm level."
+  }
+}
+
 variable "ssl_alert" {
   description = "Configuration for SSL certificate expiration alerts. Allows customization of project, notification channels, alert thresholds, and user labels."
   default     = {}
@@ -161,6 +211,6 @@ variable "ssl_alert" {
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     threshold_days        = optional(list(number), [15, 7])
-    user_labels            = optional(map(string), {})
+    user_labels           = optional(map(string), {})
   })
 }
