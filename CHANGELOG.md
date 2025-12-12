@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- refs platform/board#4051: add Lite LLM monitoring
+- refs platform/board#4051: add LiteLLM monitoring
 
 ## [0.7.0] - 2025-12-11
 
