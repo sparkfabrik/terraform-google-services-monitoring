@@ -8,7 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.7.0] - 2025-12-12
+## [0.8.0] - 2025-12-12
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.7.0...0.8.0)
+
+### Added
+
+- refs platform/board#4051: add Lite LLM monitoring
+
+## [0.7.0] - 2025-12-11
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.6.0...0.7.0)
 
