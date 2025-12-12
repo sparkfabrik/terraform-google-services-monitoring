@@ -152,7 +152,7 @@ variable "typesense" {
   }
 }
 
-variable "lite_llm" {
+variable "litellm" {
   description = "Configuration for LiteLLM monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key)."
   default     = {}
   type = object({
@@ -184,7 +184,7 @@ variable "lite_llm" {
 
   validation {
     condition = alltrue([
-      for app_name, config in var.lite_llm.apps : (
+      for app_name, config in var.litellm.apps : (
         trimspace(app_name) != "" &&
         (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
         (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true)
@@ -195,10 +195,10 @@ variable "lite_llm" {
 
   validation {
     condition = (
-      length([for app_name, config in var.lite_llm.apps : app_name if config.container_check != null]) == 0 ||
-      try(trimspace(var.lite_llm.cluster_name), "") != ""
+      length([for app_name, config in var.litellm.apps : app_name if config.container_check != null]) == 0 ||
+      try(trimspace(var.litellm.cluster_name), "") != ""
     )
-    error_message = "When any app has container_check configured, 'cluster_name' must be provided at the lite_llm level."
+    error_message = "When any app has container_check configured, 'cluster_name' must be provided at the litellm level."
   }
 }
 
