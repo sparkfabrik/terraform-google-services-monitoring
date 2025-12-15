@@ -122,7 +122,7 @@ variable "typesense" {
         pod_restart = optional(object({
           threshold          = optional(number, 0)
           alignment_period   = optional(number, 60)
-          duration           = optional(number, 120)
+          duration           = optional(number, 180)
           auto_close_seconds = optional(number, 3600)
           notification_prompts = optional(list(string), ["OPENED", "CLOSED"])
         }), {})
@@ -173,7 +173,7 @@ variable "litellm" {
         pod_restart = optional(object({
           threshold          = optional(number, 0)
           alignment_period   = optional(number, 60)
-          duration           = optional(number, 120)
+          duration           = optional(number, 180)
           auto_close_seconds = optional(number, 3600)
           notification_prompts = optional(list(string), ["OPENED", "CLOSED"])
         }), {})
