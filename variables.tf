@@ -107,26 +107,24 @@ variable "typesense" {
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
-    cluster_name          = optional(string, null) # GKE cluster name for container checks
+    cluster_name          = optional(string, null)
 
-    # Apps configuration - map keyed by app_name
     apps = optional(map(object({
-      # Uptime check configuration (optional)
       uptime_check = optional(object({
         enabled = optional(bool, true)
         host    = string
         path    = optional(string, "/readyz")
       }), null)
 
-      # Container check configuration for GKE (optional)
       container_check = optional(object({
         enabled   = optional(bool, true)
         namespace = string
         pod_restart = optional(object({
           threshold          = optional(number, 0)
           alignment_period   = optional(number, 60)
-          duration           = optional(number, 0)
+          duration           = optional(number, 180)
           auto_close_seconds = optional(number, 3600)
+          notification_prompts = optional(list(string), null)
         }), {})
       }), null)
     })), {})
@@ -175,8 +173,9 @@ variable "litellm" {
         pod_restart = optional(object({
           threshold          = optional(number, 0)
           alignment_period   = optional(number, 60)
-          duration           = optional(number, 0)
+          duration           = optional(number, 180)
           auto_close_seconds = optional(number, 3600)
+          notification_prompts = optional(list(string), null)
         }), {})
       }), null)
     })), {})
