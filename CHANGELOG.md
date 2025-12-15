@@ -8,6 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-12-15
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.8.0...0.9.0)
+
+### Added
+
+- Add `notification_prompts` param for LiteLLM and Typesense
+
+### Changed
+
+- Modify the default values of the pod restart alerts `duration` and `alignment_period`
+
 ## [0.8.0] - 2025-12-12
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.7.0...0.8.0)

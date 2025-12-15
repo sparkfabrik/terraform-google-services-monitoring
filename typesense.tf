@@ -75,5 +75,6 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
 
   alert_strategy {
     auto_close = "${each.value.pod_restart.auto_close_seconds}s"
+    notification_prompts = each.value.pod_restart.notification_prompts
   }
 }
