@@ -43,6 +43,7 @@ locals {
         OR "(?i)x509"
         OR "(?i)is invalid:"
         OR "(?i)connection refused"
+        OR "(?i)no agent available"
         OR "(?i)fatal error"
         OR "(?i)panic"
     )
