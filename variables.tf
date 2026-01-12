@@ -99,6 +99,22 @@ variable "cert_manager" {
   })
 }
 
+variable "konnectivity_agent" {
+  description = "Configuration for Konnectivity agent deployment replica alert in GKE. Triggers when there are no available replicas."
+  type = object({
+    enabled               = optional(bool, true)
+    cluster_name          = string
+    project_id            = optional(string, null)
+    namespace             = optional(string, "kube-system")
+    deployment_name       = optional(string, "konnectivity-agent")
+    duration_seconds      = optional(number, 60)
+    auto_close_seconds    = optional(number, 3600)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    notification_prompts  = optional(list(string), null)
+  })
+}
+
 variable "typesense" {
   description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key)."
   default     = {}
@@ -120,10 +136,10 @@ variable "typesense" {
         enabled   = optional(bool, true)
         namespace = string
         pod_restart = optional(object({
-          threshold          = optional(number, 0)
-          alignment_period   = optional(number, 60)
-          duration           = optional(number, 180)
-          auto_close_seconds = optional(number, 3600)
+          threshold            = optional(number, 0)
+          alignment_period     = optional(number, 60)
+          duration             = optional(number, 180)
+          auto_close_seconds   = optional(number, 3600)
           notification_prompts = optional(list(string), null)
         }), {})
       }), null)
@@ -171,10 +187,10 @@ variable "litellm" {
         enabled   = optional(bool, true)
         namespace = string
         pod_restart = optional(object({
-          threshold          = optional(number, 0)
-          alignment_period   = optional(number, 60)
-          duration           = optional(number, 180)
-          auto_close_seconds = optional(number, 3600)
+          threshold            = optional(number, 0)
+          alignment_period     = optional(number, 60)
+          duration             = optional(number, 180)
+          auto_close_seconds   = optional(number, 3600)
           notification_prompts = optional(list(string), null)
         }), {})
       }), null)

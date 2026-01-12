@@ -8,11 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Add konnectivity agent replica alert with a PromQL-based condition that counts pods via `kubernetes_io:container_uptime`.
+- Standardize alert filter/query style for consistency across configuration.
+
 ## [0.10.0] - 2026-01-05
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.9.0...0.10.0)
 
-### Changed
+### Added
 
 - Add `no agent available` to Kyverno log alert filter to capture control plane-to-node connectivity failures via Konnectivity (upstream Kubernetes); commonly seen on GKE (especially private nodes), but not GKE-specific.
 

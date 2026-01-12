@@ -42,7 +42,7 @@ locals {
 }
 
 module "example" {
-  source  = "github.com/sparkfabrik/terraform-google-services-monitoring?ref=0.9.0"
+  source = "github.com/sparkfabrik/terraform-google-services-monitoring?ref=0.9.0"
 
   notification_channels = var.notification_channels
   project_id            = var.project_id
@@ -55,8 +55,8 @@ module "example" {
     filter_extra = "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
   }
   cert_manager = {
-    cluster_name          = "test-cluster"
-    namespace             = "cert-manager"
+    cluster_name = "test-cluster"
+    namespace    = "cert-manager"
   }
 
   typesense = {
@@ -64,13 +64,13 @@ module "example" {
     apps = {
       "typesense-app" = {
         uptime_check = {
-          host    = "typesense.example.com"
+          host = "typesense.example.com"
         }
         container_check = {
           enabled   = true
           namespace = "typesense"
           pod_restart = {
-            threshold          = 1
+            threshold = 1
           }
         }
       }
@@ -82,13 +82,13 @@ module "example" {
     apps = {
       "litellm-app" = {
         uptime_check = {
-          host    = "litellm.example.com"
+          host = "litellm.example.com"
         }
         container_check = {
           namespace = "litellm"
           pod_restart = {
-            threshold          = 2
-            duration           = 300
+            threshold            = 2
+            duration             = 300
             notification_prompts = ["CLOSED"]
           }
         }
