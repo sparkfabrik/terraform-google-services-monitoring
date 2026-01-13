@@ -53,7 +53,7 @@ resource "google_monitoring_alert_policy" "konnectivity_agent_replicas" {
   }
 
   documentation {
-    content   = "CRITICAL: Konnectivity agent has zero ready replicas in kube-system. Investigate immediately."
+    content   = "CRITICAL: Konnectivity agent has zero ready replicas in namespace ${var.konnectivity_agent_replica_alert.namespace}. Investigate immediately."
     mime_type = "text/markdown"
   }
 
