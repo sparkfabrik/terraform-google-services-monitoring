@@ -103,7 +103,7 @@ variable "konnectivity_agent" {
   description = "Configuration for Konnectivity agent deployment replica alert in GKE. Triggers when there are no available replicas."
   type = object({
     enabled               = optional(bool, true)
-    cluster_name          = string
+    cluster_name          = optional(string, null)
     project_id            = optional(string, null)
     namespace             = optional(string, "kube-system")
     deployment_name       = optional(string, "konnectivity-agent")

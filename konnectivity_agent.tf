@@ -17,7 +17,7 @@ locals {
 }
 
 resource "google_monitoring_alert_policy" "konnectivity_agent_replicas" {
-  count = var.konnectivity_agent.enabled ? 1 : 0
+  count = var.konnectivity_agent.enabled && var.konnectivity_agent.cluster_name != null && var.konnectivity_agent.cluster_name != "" ? 1 : 0
 
   project      = local.konnectivity_agent_project
   display_name = "CRITICAL: Konnectivity agent pod count == 0 (cluster=${var.konnectivity_agent.cluster_name}, namespace=${var.konnectivity_agent.namespace}, deployment=${var.konnectivity_agent.deployment_name})"
@@ -53,7 +53,7 @@ resource "google_monitoring_alert_policy" "konnectivity_agent_replicas" {
   }
 
   documentation {
-    content   = "CRITICAL: Konnectivity agent has zero ready replicas in namespace ${var.konnectivity_agent_replica_alert.namespace}. Investigate immediately."
+    content   = "CRITICAL: Konnectivity agent has zero ready replicas in namespace ${var.konnectivity_agent.namespace}. Investigate immediately."
     mime_type = "text/markdown"
   }
 
