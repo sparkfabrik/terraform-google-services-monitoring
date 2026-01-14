@@ -11,7 +11,10 @@ resource "google_monitoring_alert_policy" "ssl_expiring_days" {
   combiner     = "OR"
   conditions {
     condition_threshold {
-      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/time_until_ssl_cert_expires\" AND resource.type=\"uptime_url\""
+      filter          = <<-EOT
+        metric.type="monitoring.googleapis.com/uptime_check/time_until_ssl_cert_expires"
+        AND resource.type="uptime_url"
+      EOT
       comparison      = "COMPARISON_LT"
       threshold_value = each.value
       duration        = "600s"

@@ -69,7 +69,11 @@ resource "google_monitoring_alert_policy" "cloud_sql_cpu_utilization" {
 
   conditions {
     condition_threshold {
-      filter          = "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"${local.cloud_sql_project}:${each.value.instance}\" AND metric.type = \"cloudsql.googleapis.com/database/cpu/utilization\""
+      filter          = <<-EOT
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="${local.cloud_sql_project}:${each.value.instance}"
+        AND metric.type="cloudsql.googleapis.com/database/cpu/utilization"
+      EOT
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
       duration        = each.value.duration
@@ -101,7 +105,11 @@ resource "google_monitoring_alert_policy" "cloud_sql_memory_utilization" {
   conditions {
     display_name = "${local.cloud_sql_project} ${each.value.instance} - Memory utilization ${each.value.severity} ${each.value.threshold * 100}%"
     condition_threshold {
-      filter          = "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"${local.cloud_sql_project}:${each.value.instance}\" AND metric.type = \"cloudsql.googleapis.com/database/memory/utilization\""
+      filter          = <<-EOT
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="${local.cloud_sql_project}:${each.value.instance}"
+        AND metric.type="cloudsql.googleapis.com/database/memory/utilization"
+      EOT
       duration        = each.value.duration
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
@@ -133,7 +141,11 @@ resource "google_monitoring_alert_policy" "cloud_sql_disk_utilization" {
   conditions {
     display_name = "${local.cloud_sql_project} ${each.value.instance} - Disk utilization ${each.value.severity} ${each.value.threshold * 100}%"
     condition_threshold {
-      filter          = "resource.type = \"cloudsql_database\" AND resource.labels.database_id = \"${local.cloud_sql_project}:${each.value.instance}\" AND metric.type = \"cloudsql.googleapis.com/database/disk/utilization\""
+      filter          = <<-EOT
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="${local.cloud_sql_project}:${each.value.instance}"
+        AND metric.type="cloudsql.googleapis.com/database/disk/utilization"
+      EOT
       duration        = each.value.duration
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
