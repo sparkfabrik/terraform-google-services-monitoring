@@ -30,25 +30,25 @@ resource "google_monitoring_alert_policy" "konnectivity_agent_replicas" {
   conditions {
     display_name = "Konnectivity agent pod count == 0"
 
-    condition_prometheus_query_language {
-      query = <<-PROMQL
-        (
-          count(
-            max by (pod_name) (
-              kubernetes_io:container_uptime{
-                monitored_resource="k8s_container",
-                project_id="${local.konnectivity_agent_project}",
-                cluster_name="${var.konnectivity_agent.cluster_name}",
-                namespace_name="${var.konnectivity_agent.namespace}",
-                metadata_system_top_level_controller_name="${var.konnectivity_agent.deployment_name}"
-              }
-            )
-          )
-          or on() vector(0)
-        ) == 0
-      PROMQL
+    condition_monitoring_query_language {
+      query = <<-EOT
+        fetch k8s_container
+        | metric 'kubernetes.io/container/uptime'
+        | filter (resource.project_id == '${local.konnectivity_agent_project}')
+        | filter (resource.cluster_name == '${var.konnectivity_agent.cluster_name}')
+        | filter (resource.namespace_name == '${var.konnectivity_agent.namespace}')
+        | filter (resource.pod_name =~ '^konnectivity-agent-[^-]+-[^-]+$')
+        | filter (resource.container_name != 'konnectivity-agent-metrics-collector')
+        | group_by 1m, [row_count: row_count()]
+        | every 1m
+        | condition val() < 1
+      EOT
 
       duration = "${var.konnectivity_agent.duration_seconds}s"
+
+      trigger {
+        count = 1
+      }
     }
   }
 
