@@ -19,7 +19,7 @@ locals {
 module "typesense_uptime_checks" {
   for_each = local.typesense_uptime_checks
 
-  source                      = "github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring?ref=1.0.0"
+  source                      = "github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring?ref=1.1.0"
   gcp_project                 = local.typesense_project
   uptime_monitoring_host      = each.value.host
   uptime_monitoring_path      = each.value.path
