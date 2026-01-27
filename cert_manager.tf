@@ -9,7 +9,7 @@ locals {
   )
   cert_manager_notification_channels = var.cert_manager.notification_enabled ? (length(var.cert_manager.notification_channels) > 0 ? var.cert_manager.notification_channels : var.notification_channels) : []
 
-  cert_manager_log_filter = <<-EOT
+  cert_manager_log_filter = var.cert_manager.cluster_name != null ? (<<-EOT
     (
       (
         resource.type="k8s_container"
@@ -34,12 +34,13 @@ locals {
     )
     ${trimspace(var.cert_manager.filter_extra)}
   EOT
+  ) : ""
 }
 
 resource "google_monitoring_alert_policy" "cert_manager_logmatch_alert" {
   count = (
     var.cert_manager.enabled
-    && trimspace(var.cert_manager.cluster_name) != ""
+    && try(var.cert_manager.cluster_name, "") != ""
     && var.cert_manager.cluster_name != null
   ) ? 1 : 0
 

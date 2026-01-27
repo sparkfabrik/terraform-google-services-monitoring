@@ -3,7 +3,7 @@ locals {
   alert_documentation           = var.kyverno.alert_documentation != null ? var.kyverno.alert_documentation : "Kyverno controllers produced ERROR logs in namespace ${var.kyverno.namespace}."
   kyverno_notification_channels = var.kyverno.notification_enabled ? (length(var.kyverno.notification_channels) > 0 ? var.kyverno.notification_channels : var.notification_channels) : []
 
-  kyverno_log_filter = <<-EOT
+  kyverno_log_filter = var.kyverno.cluster_name != null ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
     AND resource.labels.cluster_name="${var.kyverno.cluster_name}"
@@ -48,12 +48,13 @@ locals {
     )
     ${trimspace(var.kyverno.filter_extra)}
   EOT
+  ) : ""
 }
 
 resource "google_monitoring_alert_policy" "kyverno_logmatch_alert" {
   count = (
     var.kyverno.enabled
-    && trimspace(var.kyverno.cluster_name) != ""
+    && try(var.kyverno.cluster_name, "") != ""
     && var.kyverno.cluster_name != null
   ) ? 1 : 0
 

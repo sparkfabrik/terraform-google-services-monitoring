@@ -11,7 +11,9 @@ variable "notification_channels" {
 
 variable "cloud_sql" {
   description = "Configuration for Cloud SQL monitoring alerts. Supports customization of project, auto-close timing, notification channels, and per-instance alert thresholds for CPU, memory, and disk utilization."
+  default     = {}
   type = object({
+    enabled               = optional(bool, true)
     project_id            = optional(string, null)
     auto_close            = optional(string, "86400s") # default 24h
     notification_enabled  = optional(bool, true)
@@ -68,9 +70,10 @@ variable "cloud_sql" {
 
 variable "kyverno" {
   description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
+  default     = {}
   type = object({
-    enabled               = optional(bool, true)
-    cluster_name          = string
+    enabled               = optional(bool, false)
+    cluster_name          = optional(string, null)
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
@@ -85,9 +88,10 @@ variable "kyverno" {
 
 variable "cert_manager" {
   description = "Configuration for cert-manager missing issuer log alert. Allows customization of project, cluster, namespace, notification channels, alert documentation, enablement, extra filters, auto-close timing, and notification rate limiting."
+  default     = {}
   type = object({
-    enabled                          = optional(bool, true)
-    cluster_name                     = string
+    enabled                          = optional(bool, false)
+    cluster_name                     = optional(string, null)
     project_id                       = optional(string, null)
     namespace                        = optional(string, "cert-manager")
     notification_enabled             = optional(bool, true)
@@ -101,8 +105,9 @@ variable "cert_manager" {
 
 variable "konnectivity_agent" {
   description = "Configuration for Konnectivity agent deployment replica alert in GKE. Triggers when there are no available replicas."
+  default     = {}
   type = object({
-    enabled               = optional(bool, true)
+    enabled               = optional(bool, false)
     cluster_name          = optional(string, null)
     project_id            = optional(string, null)
     namespace             = optional(string, "kube-system")
