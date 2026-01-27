@@ -19,8 +19,8 @@ locals {
 module "litellm_uptime_checks" {
   for_each = local.litellm_uptime_checks
 
-  source                      = "github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring?ref=1.0.0"
-  gcp_project                 = local.litellm_project
+  source                      = "./modules/http_monitoring"
+  gcp_project_id                 = local.litellm_project
   uptime_monitoring_host      = each.value.host
   uptime_monitoring_path      = each.value.path
   alert_notification_channels = local.litellm_notification_channels
