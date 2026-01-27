@@ -17,7 +17,7 @@ variable "uptime_monitoring_path" {
 
 variable "uptime_check_period" {
   type        = string
-  description = "How often, in seconds, the uptime check is performed. Currently, the only supported values are 60s (1 minute), 300s (5 minutes), 600s (10 minutes), and 900s (15 minutes). Defaults to 300s."
+  description = "How often, in seconds, the uptime check is performed. Currently, the only supported values are 60s (1 minute), 300s (5 minutes), 600s (10 minutes), and 900s (15 minutes)"
   default     = "60s"
 }
 

@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- refs platform/board#4071: remove dependecies from [`terraform-sparkfabrik-gcp-http-monitoring`](https://github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring) terraform module. **⚠️ WARN** Disabled monitoring alerts by default for `kyverno`, `cert-manager`, and `konnectivity_agent`, from now on, you must add the explicit value `enabled = true` to activate these alerts.
+- refs platform/board#4071: remove dependecies from [`terraform-sparkfabrik-gcp-http-monitoring`](https://github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring) terraform module.
 
 ## [0.11.0] - 2026-01-14
 

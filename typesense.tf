@@ -20,7 +20,7 @@ module "typesense_uptime_checks" {
   for_each = local.typesense_uptime_checks
 
   source                      = "./modules/http_monitoring"
-  gcp_project_id                 = local.typesense_project
+  gcp_project_id              = local.typesense_project
   uptime_monitoring_host      = each.value.host
   uptime_monitoring_path      = each.value.path
   alert_notification_channels = local.typesense_notification_channels
