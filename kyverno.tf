@@ -3,10 +3,12 @@ locals {
   alert_documentation           = var.kyverno.alert_documentation != null ? var.kyverno.alert_documentation : "Kyverno controllers produced ERROR logs in namespace ${var.kyverno.namespace}."
   kyverno_notification_channels = var.kyverno.notification_enabled ? (length(var.kyverno.notification_channels) > 0 ? var.kyverno.notification_channels : var.notification_channels) : []
 
-  kyverno_log_filter = <<-EOT
+  kyverno_cluster_name = var.kyverno.cluster_name != null ? trimspace(var.kyverno.cluster_name) : ""
+  
+  kyverno_log_filter = local.kyverno_cluster_name != "" ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
-    AND resource.labels.cluster_name="${var.kyverno.cluster_name}"
+    AND resource.labels.cluster_name="${local.kyverno_cluster_name}"
     AND resource.labels.namespace_name="${var.kyverno.namespace}"
     AND (
       labels."k8s-pod/app_kubernetes_io/component"=~"(admission-controller|background-controller|cleanup-controller|reports-controller)"
@@ -48,13 +50,13 @@ locals {
     )
     ${trimspace(var.kyverno.filter_extra)}
   EOT
+  ) : ""
 }
 
 resource "google_monitoring_alert_policy" "kyverno_logmatch_alert" {
   count = (
     var.kyverno.enabled
-    && trimspace(var.kyverno.cluster_name) != ""
-    && var.kyverno.cluster_name != null
+    && local.kyverno_cluster_name != ""
   ) ? 1 : 0
 
   display_name = "Kyverno controllers ERROR logs (namespace=${var.kyverno.namespace})"

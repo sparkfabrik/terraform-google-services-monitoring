@@ -11,7 +11,9 @@ variable "notification_channels" {
 
 variable "cloud_sql" {
   description = "Configuration for Cloud SQL monitoring alerts. Supports customization of project, auto-close timing, notification channels, and per-instance alert thresholds for CPU, memory, and disk utilization."
+  default     = {}
   type = object({
+    enabled               = optional(bool, true)
     project_id            = optional(string, null)
     auto_close            = optional(string, "86400s") # default 24h
     notification_enabled  = optional(bool, true)
@@ -68,9 +70,10 @@ variable "cloud_sql" {
 
 variable "kyverno" {
   description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
+  default     = {}
   type = object({
     enabled               = optional(bool, true)
-    cluster_name          = string
+    cluster_name          = optional(string, null)
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
@@ -81,13 +84,22 @@ variable "kyverno" {
     filter_extra                     = optional(string, "")
     namespace                        = optional(string, "kyverno")
   })
+
+  validation {
+    condition = (
+      !var.kyverno.enabled ||
+      (var.kyverno.cluster_name != null && var.kyverno.cluster_name != "")
+    )
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
 }
 
 variable "cert_manager" {
   description = "Configuration for cert-manager missing issuer log alert. Allows customization of project, cluster, namespace, notification channels, alert documentation, enablement, extra filters, auto-close timing, and notification rate limiting."
+  default     = {}
   type = object({
     enabled                          = optional(bool, true)
-    cluster_name                     = string
+    cluster_name                     = optional(string, null)
     project_id                       = optional(string, null)
     namespace                        = optional(string, "cert-manager")
     notification_enabled             = optional(bool, true)
@@ -97,10 +109,19 @@ variable "cert_manager" {
     auto_close_seconds               = optional(number, 3600)
     filter_extra                     = optional(string, "")
   })
+
+  validation {
+    condition = (
+      !var.cert_manager.enabled ||
+      (var.cert_manager.cluster_name != null && var.cert_manager.cluster_name != "")
+    )
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
 }
 
 variable "konnectivity_agent" {
   description = "Configuration for Konnectivity agent deployment replica alert in GKE. Triggers when there are no available replicas."
+  default     = {}
   type = object({
     enabled               = optional(bool, true)
     cluster_name          = optional(string, null)
@@ -113,6 +134,14 @@ variable "konnectivity_agent" {
     notification_channels = optional(list(string), [])
     notification_prompts  = optional(list(string), null)
   })
+
+  validation {
+    condition = (
+      !var.konnectivity_agent.enabled ||
+      (var.konnectivity_agent.cluster_name != null && var.konnectivity_agent.cluster_name != "")
+    )
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
 }
 
 variable "typesense" {

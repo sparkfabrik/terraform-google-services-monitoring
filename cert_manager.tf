@@ -8,19 +8,20 @@ locals {
     EOT
   )
   cert_manager_notification_channels = var.cert_manager.notification_enabled ? (length(var.cert_manager.notification_channels) > 0 ? var.cert_manager.notification_channels : var.notification_channels) : []
+  cert_manager_cluster_name = var.cert_manager.cluster_name != null ? trimspace(var.cert_manager.cluster_name) : ""
 
-  cert_manager_log_filter = <<-EOT
+  cert_manager_log_filter = local.cert_manager_cluster_name != "" ? (<<-EOT
     (
       (
         resource.type="k8s_container"
         AND resource.labels.project_id="${local.cert_manager_project_id}"
-        AND resource.labels.cluster_name="${var.cert_manager.cluster_name}"
+        AND resource.labels.cluster_name="${local.cert_manager_cluster_name}"
         AND resource.labels.namespace_name="${var.cert_manager.namespace}"
       )
       OR (
         log_id("events")
         AND resource.labels.project_id="${local.cert_manager_project_id}"
-        AND resource.labels.cluster_name="${var.cert_manager.cluster_name}"
+        AND resource.labels.cluster_name="${local.cert_manager_cluster_name}"
         AND (
           jsonPayload.involvedObject.namespace="${var.cert_manager.namespace}"
           OR jsonPayload.metadata.namespace="${var.cert_manager.namespace}"
@@ -34,16 +35,16 @@ locals {
     )
     ${trimspace(var.cert_manager.filter_extra)}
   EOT
+  ) : ""
 }
 
 resource "google_monitoring_alert_policy" "cert_manager_logmatch_alert" {
   count = (
     var.cert_manager.enabled
-    && trimspace(var.cert_manager.cluster_name) != ""
-    && var.cert_manager.cluster_name != null
+    && local.cert_manager_cluster_name != ""
   ) ? 1 : 0
 
-  display_name = "cert-manager missing Issuer/ClusterIssuer (cluster=${var.cert_manager.cluster_name}, namespace=${var.cert_manager.namespace})"
+  display_name = "cert-manager missing Issuer/ClusterIssuer (cluster=${local.cert_manager_cluster_name}, namespace=${var.cert_manager.namespace})"
   combiner     = "OR"
   enabled      = var.cert_manager.enabled
 
