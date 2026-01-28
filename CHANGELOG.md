@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- refs platform/board#4071: remove dependecies from [`terraform-sparkfabrik-gcp-http-monitoring`](https://github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring) terraform module.
+- refs platform/board#4071: remove dependencies from [`terraform-sparkfabrik-gcp-http-monitoring`](https://github.com/sparkfabrik/terraform-sparkfabrik-gcp-http-monitoring) terraform module.
 
 ## [0.11.0] - 2026-01-14
 

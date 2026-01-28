@@ -21,7 +21,7 @@ locals {
       OR (
         log_id("events")
         AND resource.labels.project_id="${local.cert_manager_project_id}"
-        AND resource.labels.cluster_name="${var.cert_manager.cluster_name}"
+        AND resource.labels.cluster_name="${local.cert_manager_cluster_name}"
         AND (
           jsonPayload.involvedObject.namespace="${var.cert_manager.namespace}"
           OR jsonPayload.metadata.namespace="${var.cert_manager.namespace}"
@@ -44,7 +44,7 @@ resource "google_monitoring_alert_policy" "cert_manager_logmatch_alert" {
     && local.cert_manager_cluster_name != ""
   ) ? 1 : 0
 
-  display_name = "cert-manager missing Issuer/ClusterIssuer (cluster=${var.cert_manager.cluster_name}, namespace=${var.cert_manager.namespace})"
+  display_name = "cert-manager missing Issuer/ClusterIssuer (cluster=${local.cert_manager_cluster_name}, namespace=${var.cert_manager.namespace})"
   combiner     = "OR"
   enabled      = var.cert_manager.enabled
 
