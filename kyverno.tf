@@ -40,10 +40,10 @@ locals {
   ]
 
   # Combine default patterns with included patterns, then filter out excluded ones
-  kyverno_all_error_patterns = concat(
+  kyverno_all_error_patterns = distinct(concat(
     local.kyverno_default_error_patterns,
     var.kyverno.error_patterns_include
-  )
+  ))
 
   kyverno_active_error_patterns = [
     for pattern in local.kyverno_all_error_patterns :
