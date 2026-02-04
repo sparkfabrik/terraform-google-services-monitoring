@@ -1,7 +1,7 @@
 locals {
-  suffix                          = var.uptime_monitoring_path != "/" ? var.uptime_monitoring_path : ""
-  uptime_monitoring_display_name  = var.uptime_monitoring_display_name != "" ? "${var.uptime_monitoring_display_name} - ${var.uptime_monitoring_host}${local.suffix}" : "${var.uptime_monitoring_host}${local.suffix}"
-  alert_display_name              = var.alert_display_name != "" ? var.alert_display_name : "Failure of uptime check for: ${local.uptime_monitoring_display_name}"
+  suffix                         = var.uptime_monitoring_path != "/" ? var.uptime_monitoring_path : ""
+  uptime_monitoring_display_name = var.uptime_monitoring_display_name != "" ? "${var.uptime_monitoring_display_name} - ${var.uptime_monitoring_host}${local.suffix}" : "${var.uptime_monitoring_host}${local.suffix}"
+  alert_display_name             = var.alert_display_name != "" ? var.alert_display_name : "Failure of uptime check for: ${local.uptime_monitoring_display_name}"
 }
 
 resource "google_monitoring_uptime_check_config" "https_uptime" {

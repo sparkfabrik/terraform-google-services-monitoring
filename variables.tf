@@ -69,7 +69,7 @@ variable "cloud_sql" {
 }
 
 variable "kyverno" {
-  description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, extra filters, and namespace."
+  description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, error pattern inclusions/exclusions for jsonPayload.error matching, and namespace."
   default     = {}
   type = object({
     enabled               = optional(bool, true)
@@ -81,8 +81,22 @@ variable "kyverno" {
     logmatch_notification_rate_limit = optional(string, "300s")
     alert_documentation              = optional(string, null)
     auto_close_seconds               = optional(number, 3600)
-    filter_extra                     = optional(string, "")
     namespace                        = optional(string, "kyverno")
+    # List of error patterns to exclude from the default set.
+    # Default patterns available for exclusion:
+    #   "internal error", "failed calling webhook", "timeout", "client-side throttling",
+    #   "failed to run warmup", "schema not found", "failed to list resources",
+    #   "failed to watch resource", "context deadline exceeded", "is forbidden",
+    #   "cannot list resource", "cannot watch resource", "RBAC.*denied",
+    #   "failed to start watcher", "leader election lost", "unable to update .*WebhookConfiguration",
+    #   "failed to sync", "dropping request", "failed to load certificate",
+    #   "failed to update lock", "the object has been modified", "no matches for kind",
+    #   "the server could not find the requested resource", "Too Many Requests", "x509",
+    #   "is invalid:", "connection refused", "no agent available", "fatal error", "panic"
+    error_patterns_exclude = optional(list(string), [])
+    # List of additional regex error patterns to include (added to default set)
+    # e.g. ["my custom.*error", "failed to connect.*database"]
+    error_patterns_include = optional(list(string), [])
   })
 
   validation {
@@ -91,6 +105,86 @@ variable "kyverno" {
       (var.kyverno.cluster_name != null && var.kyverno.cluster_name != "")
     )
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
+
+  validation {
+    condition = alltrue([
+      for pattern in var.kyverno.error_patterns_exclude : contains([
+        "internal error",
+        "failed calling webhook",
+        "timeout",
+        "client-side throttling",
+        "failed to run warmup",
+        "schema not found",
+        "failed to list resources",
+        "failed to watch resource",
+        "context deadline exceeded",
+        "is forbidden",
+        "cannot list resource",
+        "cannot watch resource",
+        "RBAC.*denied",
+        "failed to start watcher",
+        "leader election lost",
+        "unable to update .*WebhookConfiguration",
+        "failed to sync",
+        "dropping request",
+        "failed to load certificate",
+        "failed to update lock",
+        "the object has been modified",
+        "no matches for kind",
+        "the server could not find the requested resource",
+        "Too Many Requests",
+        "x509",
+        "is invalid:",
+        "connection refused",
+        "no agent available",
+        "fatal error",
+        "panic",
+      ], pattern)
+    ])
+    error_message = "error_patterns_exclude contains invalid pattern(s). Only default patterns can be excluded. Check the variable description for the list of valid patterns."
+  }
+
+  validation {
+    condition = (
+      !var.kyverno.enabled ||
+      length(setsubtract(
+        toset(concat([
+          "internal error",
+          "failed calling webhook",
+          "timeout",
+          "client-side throttling",
+          "failed to run warmup",
+          "schema not found",
+          "failed to list resources",
+          "failed to watch resource",
+          "context deadline exceeded",
+          "is forbidden",
+          "cannot list resource",
+          "cannot watch resource",
+          "RBAC.*denied",
+          "failed to start watcher",
+          "leader election lost",
+          "unable to update .*WebhookConfiguration",
+          "failed to sync",
+          "dropping request",
+          "failed to load certificate",
+          "failed to update lock",
+          "the object has been modified",
+          "no matches for kind",
+          "the server could not find the requested resource",
+          "Too Many Requests",
+          "x509",
+          "is invalid:",
+          "connection refused",
+          "no agent available",
+          "fatal error",
+          "panic",
+        ], var.kyverno.error_patterns_include)),
+        toset(var.kyverno.error_patterns_exclude)
+      )) > 0
+    )
+    error_message = "The combination of error_patterns_exclude and error_patterns_include results in no active error patterns. At least one pattern must remain active, otherwise the alert will not be created."
   }
 }
 

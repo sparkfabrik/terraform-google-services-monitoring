@@ -8,7 +8,7 @@ locals {
     EOT
   )
   cert_manager_notification_channels = var.cert_manager.notification_enabled ? (length(var.cert_manager.notification_channels) > 0 ? var.cert_manager.notification_channels : var.notification_channels) : []
-  cert_manager_cluster_name = var.cert_manager.cluster_name != null ? trimspace(var.cert_manager.cluster_name) : ""
+  cert_manager_cluster_name          = var.cert_manager.cluster_name != null ? trimspace(var.cert_manager.cluster_name) : ""
 
   cert_manager_log_filter = local.cert_manager_cluster_name != "" ? (<<-EOT
     (
