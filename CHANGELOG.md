@@ -17,6 +17,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Adjust Kyverno log filter to reduce false positives from normal transient errors such as `i/o timeout` and `failed to acquire lease`, including removal of the explicit `failed to acquire lease` condition.
 - Rename error pattern `list resources failed` to `failed to list resources` for consistency with other error patterns.
 
+### Added
+
+- Add `error_patterns_exclude` to Kyverno configuration to allow excluding specific error patterns from the default set.
+- Add `error_patterns_include` to Kyverno configuration to allow adding custom error patterns to the default set.
+- Add validation for `error_patterns_exclude` to ensure only valid default patterns can be excluded.
+
 ## [0.12.0] - 2026-01-28
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.11.0...0.12.0)

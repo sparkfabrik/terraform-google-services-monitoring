@@ -106,6 +106,44 @@ variable "kyverno" {
     )
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
   }
+
+  validation {
+    condition = alltrue([
+      for pattern in var.kyverno.error_patterns_exclude : contains([
+        "internal error",
+        "failed calling webhook",
+        "timeout",
+        "client-side throttling",
+        "failed to run warmup",
+        "schema not found",
+        "failed to list resources",
+        "failed to watch resource",
+        "context deadline exceeded",
+        "is forbidden",
+        "cannot list resource",
+        "cannot watch resource",
+        "RBAC.*denied",
+        "failed to start watcher",
+        "leader election lost",
+        "unable to update .*WebhookConfiguration",
+        "failed to sync",
+        "dropping request",
+        "failed to load certificate",
+        "failed to update lock",
+        "the object has been modified",
+        "no matches for kind",
+        "the server could not find the requested resource",
+        "Too Many Requests",
+        "x509",
+        "is invalid:",
+        "connection refused",
+        "no agent available",
+        "fatal error",
+        "panic",
+      ], pattern)
+    ])
+    error_message = "error_patterns_exclude contains invalid pattern(s). Only default patterns can be excluded. Check the variable description for the list of valid patterns."
+  }
 }
 
 variable "cert_manager" {
