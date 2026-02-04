@@ -4,7 +4,7 @@ locals {
   kyverno_notification_channels = var.kyverno.notification_enabled ? (length(var.kyverno.notification_channels) > 0 ? var.kyverno.notification_channels : var.notification_channels) : []
 
   kyverno_cluster_name = var.kyverno.cluster_name != null ? trimspace(var.kyverno.cluster_name) : ""
-  
+
   kyverno_log_filter = local.kyverno_cluster_name != "" ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
@@ -24,13 +24,11 @@ locals {
       OR jsonPayload.error=~"(?i)list resources failed"
       OR jsonPayload.error=~"(?i)failed to watch resource"
       OR jsonPayload.error=~"(?i)context deadline exceeded"
-      OR jsonPayload.error=~"(?i)i/o timeout"
       OR jsonPayload.error=~"(?i)is forbidden"
       OR jsonPayload.error=~"(?i)cannot list resource"
       OR jsonPayload.error=~"(?i)cannot watch resource"
       OR jsonPayload.error=~"(?i)RBAC.*denied"
       OR jsonPayload.error=~"(?i)failed to start watcher"
-      OR jsonPayload.error=~"(?i)failed to acquire lease"
       OR jsonPayload.error=~"(?i)leader election lost"
       OR jsonPayload.error=~"(?i)unable to update .*WebhookConfiguration"
       OR jsonPayload.error=~"(?i)failed to sync"

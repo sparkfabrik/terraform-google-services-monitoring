@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-02-04
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.12.0...0.13.0)
+
+### Changed
+
+- Remove unnecessary error conditions from Kyverno log filter (`i/o timeout`, `failed to acquire lease`) as they represent normal transient behavior and were causing false positives.
+
 ## [0.12.0] - 2026-01-28
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.11.0...0.12.0)
