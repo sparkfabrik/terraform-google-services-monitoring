@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Remove unnecessary error conditions from Kyverno log filter (`i/o timeout`, `failed to acquire lease`) as they represent normal transient behavior and were causing false positives.
+- Adjust Kyverno log filter to reduce false positives from normal transient errors such as `i/o timeout` and `failed to acquire lease`, including removal of the explicit `failed to acquire lease` condition.
 
 ## [0.12.0] - 2026-01-28
 
