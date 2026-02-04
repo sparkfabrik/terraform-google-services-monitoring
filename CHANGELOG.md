@@ -28,7 +28,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `filter_extra` variable has been removed and replaced with `error_patterns_include` and `error_patterns_exclude`. To migrate:
   - If you were using `filter_extra` to add custom error patterns for `jsonPayload.error` matching, use `error_patterns_include` instead.
   - If you need to exclude specific default error patterns, use `error_patterns_exclude`.
-  - **Note:** The new options only support error pattern matching against `jsonPayload.error`. If you were using `filter_extra` for arbitrary log filter conditions (e.g., negative filters like `-textPayload:"..."`), this functionality is no longer available.
+  - **Note:** The new options are specifically designed for error pattern matching against `jsonPayload.error`.
   - See [examples/main.tf](examples/main.tf) for usage examples.
 
 ## [0.12.0] - 2026-01-28
