@@ -5,7 +5,58 @@ locals {
 
   kyverno_cluster_name = var.kyverno.cluster_name != null ? trimspace(var.kyverno.cluster_name) : ""
 
-  kyverno_log_filter = local.kyverno_cluster_name != "" ? (<<-EOT
+  # Default error patterns for Kyverno log matching
+  kyverno_default_error_patterns = [
+    "internal error",
+    "failed calling webhook",
+    "timeout",
+    "client-side throttling",
+    "failed to run warmup",
+    "schema not found",
+    "failed to list resources",
+    "failed to watch resource",
+    "context deadline exceeded",
+    "is forbidden",
+    "cannot list resource",
+    "cannot watch resource",
+    "RBAC.*denied",
+    "failed to start watcher",
+    "leader election lost",
+    "unable to update .*WebhookConfiguration",
+    "failed to sync",
+    "dropping request",
+    "failed to load certificate",
+    "failed to update lock",
+    "the object has been modified",
+    "no matches for kind",
+    "the server could not find the requested resource",
+    "Too Many Requests",
+    "x509",
+    "is invalid:",
+    "connection refused",
+    "no agent available",
+    "fatal error",
+    "panic",
+  ]
+
+  # Combine default patterns with included patterns, then filter out excluded ones
+  kyverno_all_error_patterns = concat(
+    local.kyverno_default_error_patterns,
+    var.kyverno.error_patterns_include
+  )
+
+  kyverno_active_error_patterns = [
+    for pattern in local.kyverno_all_error_patterns :
+    pattern if !contains(var.kyverno.error_patterns_exclude, pattern)
+  ]
+
+  # Build the error patterns filter string
+  kyverno_error_patterns_filter = length(local.kyverno_active_error_patterns) > 0 ? join("\n      OR ", [
+    for pattern in local.kyverno_active_error_patterns :
+    "jsonPayload.error=~\"(?i)${pattern}\""
+  ]) : ""
+
+  kyverno_log_filter = local.kyverno_cluster_name != "" && length(local.kyverno_active_error_patterns) > 0 ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
     AND resource.labels.cluster_name="${local.kyverno_cluster_name}"
@@ -15,38 +66,8 @@ locals {
       OR resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
     )
     AND (
-      jsonPayload.error=~"(?i)internal error"
-      OR jsonPayload.error=~"(?i)failed calling webhook"
-      OR jsonPayload.error=~"(?i)timeout"
-      OR jsonPayload.error=~"(?i)client-side throttling"
-      OR jsonPayload.error=~"(?i)failed to run warmup"
-      OR jsonPayload.error=~"(?i)schema not found"
-      OR jsonPayload.error=~"(?i)failed to list resources"
-      OR jsonPayload.error=~"(?i)failed to watch resource"
-      OR jsonPayload.error=~"(?i)context deadline exceeded"
-      OR jsonPayload.error=~"(?i)is forbidden"
-      OR jsonPayload.error=~"(?i)cannot list resource"
-      OR jsonPayload.error=~"(?i)cannot watch resource"
-      OR jsonPayload.error=~"(?i)RBAC.*denied"
-      OR jsonPayload.error=~"(?i)failed to start watcher"
-      OR jsonPayload.error=~"(?i)leader election lost"
-      OR jsonPayload.error=~"(?i)unable to update .*WebhookConfiguration"
-      OR jsonPayload.error=~"(?i)failed to sync"
-      OR jsonPayload.error=~"(?i)dropping request"
-      OR jsonPayload.error=~"(?i)failed to load certificate"
-      OR jsonPayload.error=~"(?i)failed to update lock"
-      OR jsonPayload.error=~"(?i)the object has been modified"
-      OR jsonPayload.error=~"(?i)no matches for kind"
-      OR jsonPayload.error=~"(?i)the server could not find the requested resource"
-      OR jsonPayload.error=~"(?i)Too Many Requests"
-      OR jsonPayload.error=~"(?i)x509"
-      OR jsonPayload.error=~"(?i)is invalid:"
-      OR jsonPayload.error=~"(?i)connection refused"
-      OR jsonPayload.error=~"(?i)no agent available"
-      OR jsonPayload.error=~"(?i)fatal error"
-      OR jsonPayload.error=~"(?i)panic"
+      ${local.kyverno_error_patterns_filter}
     )
-    ${trimspace(var.kyverno.filter_extra)}
   EOT
   ) : ""
 }
@@ -55,6 +76,7 @@ resource "google_monitoring_alert_policy" "kyverno_logmatch_alert" {
   count = (
     var.kyverno.enabled
     && local.kyverno_cluster_name != ""
+    && length(local.kyverno_active_error_patterns) > 0
   ) ? 1 : 0
 
   display_name = "Kyverno controllers ERROR logs (namespace=${var.kyverno.namespace})"

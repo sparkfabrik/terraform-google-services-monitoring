@@ -50,9 +50,16 @@ module "example" {
   kyverno = {
     cluster_name          = "test-cluster"
     notification_channels = []
-    # Optional filter for log entries, exclude known non-actionable messages
-    # e.g., "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
-    filter_extra = "-textPayload:\"stale GroupVersion discovery: metrics.k8s.io/v1beta1\""
+    # Exclude specific error patterns from the default set
+    error_patterns_exclude = [
+      "failed to start watcher",
+      "failed to list resources",
+    ]
+    # Add custom error patterns to the default set
+    # error_patterns_include = [
+    #   "my custom error",
+    #   "another pattern to match",
+    # ]
   }
   cert_manager = {
     cluster_name = "test-cluster"
