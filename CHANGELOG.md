@@ -23,6 +23,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add `error_patterns_include` to Kyverno configuration to allow adding custom error patterns to the default set.
 - Add validation for `error_patterns_exclude` to ensure only valid default patterns can be excluded.
 
+### Breaking change
+
+- The `filter_extra` variable has been removed and replaced with `error_patterns_include` and `error_patterns_exclude`. To migrate:
+  - If you were using `filter_extra` to add custom error patterns, use `error_patterns_include` instead.
+  - If you need to exclude specific default error patterns, use `error_patterns_exclude`.
+  - See [examples/main.tf](examples/main.tf) for usage examples.
+
 ## [0.12.0] - 2026-01-28
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.11.0...0.12.0)
