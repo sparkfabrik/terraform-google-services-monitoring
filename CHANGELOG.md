@@ -15,6 +15,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Adjust Kyverno log filter to reduce false positives from normal transient errors such as `i/o timeout` and `failed to acquire lease`, including removal of the explicit `failed to acquire lease` condition.
+- Rename error pattern `list resources failed` to `failed to list resources` for consistency with other error patterns.
 
 ## [0.12.0] - 2026-01-28
 

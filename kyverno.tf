@@ -21,7 +21,7 @@ locals {
       OR jsonPayload.error=~"(?i)client-side throttling"
       OR jsonPayload.error=~"(?i)failed to run warmup"
       OR jsonPayload.error=~"(?i)schema not found"
-      OR jsonPayload.error=~"(?i)list resources failed"
+      OR jsonPayload.error=~"(?i)failed to list resources"
       OR jsonPayload.error=~"(?i)failed to watch resource"
       OR jsonPayload.error=~"(?i)context deadline exceeded"
       OR jsonPayload.error=~"(?i)is forbidden"
