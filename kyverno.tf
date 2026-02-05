@@ -5,76 +5,57 @@ locals {
 
   kyverno_cluster_name = var.kyverno.cluster_name != null ? trimspace(var.kyverno.cluster_name) : ""
 
-  # Default error patterns for Kyverno log matching
-  kyverno_default_error_patterns = [
-    "internal error",
-    "failed calling webhook",
-    "timeout",
-    "client-side throttling",
-    "failed to run warmup",
-    "schema not found",
+  # Default message patterns for Kyverno log matching (matches against jsonPayload.message)
+  kyverno_default_message_patterns = [
     "failed to list resources",
     "failed to watch resource",
-    "context deadline exceeded",
-    "is forbidden",
-    "cannot list resource",
-    "cannot watch resource",
-    "RBAC.*denied",
     "failed to start watcher",
-    "leader election lost",
-    "unable to update .*WebhookConfiguration",
     "failed to sync",
-    "dropping request",
+    "failed to run warmup",
     "failed to load certificate",
     "failed to update lock",
-    "the object has been modified",
-    "no matches for kind",
-    "the server could not find the requested resource",
-    "Too Many Requests",
-    "x509",
-    "is invalid:",
-    "connection refused",
-    "no agent available",
-    "fatal error",
+    "failed to update lease",
+    "failed to process request",
+    "failed to check permissions",
+    "failed to scan resource",
+    "failed to fetch data",
+    "failed to substitute variables",
+    "failed calling webhook",
+    "leader election lost",
+    "dropping request",
     "panic",
   ]
 
   # Combine default patterns with included patterns, then filter out excluded ones
-  kyverno_all_error_patterns = distinct(concat(
-    local.kyverno_default_error_patterns,
+  kyverno_all_message_patterns = distinct(concat(
+    local.kyverno_default_message_patterns,
     var.kyverno.error_patterns_include
   ))
 
-  kyverno_active_error_patterns = [
-    for pattern in local.kyverno_all_error_patterns :
+  kyverno_active_message_patterns = [
+    for pattern in local.kyverno_all_message_patterns :
     pattern if !contains(var.kyverno.error_patterns_exclude, pattern)
   ]
 
-  # Build the error patterns filter string
-  kyverno_error_patterns_filter = length(local.kyverno_active_error_patterns) > 0 ? join("\n      OR ", [
-    for pattern in local.kyverno_active_error_patterns :
-    "jsonPayload.error=~\"(?i)${pattern}\""
+  # Build the message patterns filter string
+  kyverno_message_patterns_filter = length(local.kyverno_active_message_patterns) > 0 ? join("\n      OR ", [
+    for pattern in local.kyverno_active_message_patterns :
+    "jsonPayload.message=~\"(?i)${pattern}\""
   ]) : ""
 
-  # Build NOT conditions for excluded patterns on jsonPayload.message
-  kyverno_message_exclusions = length(var.kyverno.error_patterns_exclude) > 0 ? join("\n    ", [
-    for pattern in var.kyverno.error_patterns_exclude :
-    "AND NOT jsonPayload.message=~\"(?i)${pattern}\""
-  ]) : ""
-
-  kyverno_log_filter = local.kyverno_cluster_name != "" && length(local.kyverno_active_error_patterns) > 0 ? (<<-EOT
+  kyverno_log_filter = local.kyverno_cluster_name != "" && length(local.kyverno_active_message_patterns) > 0 ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
     AND resource.labels.cluster_name="${local.kyverno_cluster_name}"
     AND resource.labels.namespace_name="${var.kyverno.namespace}"
+    AND severity=ERROR
     AND (
       labels."k8s-pod/app_kubernetes_io/component"=~"(admission-controller|background-controller|cleanup-controller|reports-controller)"
       OR resource.labels.pod_name=~"kyverno-(admission|background|cleanup|reports)-controller-.*"
     )
     AND (
-      ${local.kyverno_error_patterns_filter}
+      ${local.kyverno_message_patterns_filter}
     )
-    ${local.kyverno_message_exclusions}
   EOT
   ) : ""
 }
@@ -83,7 +64,7 @@ resource "google_monitoring_alert_policy" "kyverno_logmatch_alert" {
   count = (
     var.kyverno.enabled
     && local.kyverno_cluster_name != ""
-    && length(local.kyverno_active_error_patterns) > 0
+    && length(local.kyverno_active_message_patterns) > 0
   ) ? 1 : 0
 
   display_name = "Kyverno controllers ERROR logs (namespace=${var.kyverno.namespace})"
