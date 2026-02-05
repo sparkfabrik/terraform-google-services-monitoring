@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-02-05
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.13.0...0.13.1)
+
+### Changed
+
+- Extend `error_patterns_exclude` behavior: excluded patterns now also generate `NOT jsonPayload.message=~"pattern"` conditions, allowing exclusion of logs where the pattern appears in the message field (not just the error field).
+
 ## [0.13.0] - 2026-02-04
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.12.0...0.13.0)

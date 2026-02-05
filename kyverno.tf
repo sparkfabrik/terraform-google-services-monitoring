@@ -56,6 +56,12 @@ locals {
     "jsonPayload.error=~\"(?i)${pattern}\""
   ]) : ""
 
+  # Build NOT conditions for excluded patterns on jsonPayload.message
+  kyverno_message_exclusions = length(var.kyverno.error_patterns_exclude) > 0 ? join("\n    ", [
+    for pattern in var.kyverno.error_patterns_exclude :
+    "AND NOT jsonPayload.message=~\"(?i)${pattern}\""
+  ]) : ""
+
   kyverno_log_filter = local.kyverno_cluster_name != "" && length(local.kyverno_active_error_patterns) > 0 ? (<<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
@@ -68,6 +74,7 @@ locals {
     AND (
       ${local.kyverno_error_patterns_filter}
     )
+    ${local.kyverno_message_exclusions}
   EOT
   ) : ""
 }
