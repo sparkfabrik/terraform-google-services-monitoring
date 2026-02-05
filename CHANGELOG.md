@@ -8,6 +8,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-02-05
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.13.0...0.14.0)
+
+### Breaking change
+
+- **Kyverno log matching now uses `jsonPayload.message` instead of `jsonPayload.error`**. This provides more precise control over which log messages trigger alerts and enables proper exclusion of specific messages.
+  - Error-detail patterns like `"is forbidden"`, `"context deadline exceeded"`, `"timeout"` have been removed as they appear in the `error` field, not the `message` field.
+  - Patterns are now specific (e.g., `"failed to update lock"`) instead of generic (e.g., `"failed to update"`) to avoid overlap when excluding.
+  - To migrate:
+    - Review your `error_patterns_exclude` and `error_patterns_include` configurations and update pattern names/values if needed so that they correctly match `jsonPayload.message` instead of `jsonPayload.error`.
+    - The variable names remain `error_patterns_exclude` and `error_patterns_include` for backwards compatibility, even though they now operate on the `message` field; no variable renaming is required.
+
+### Changed
+
+- Add `severity=ERROR` filter condition to ensure only error-level logs trigger alerts.
+- Update Kyverno default patterns to message-based matching:
+  - `"failed to list resources"`, `"failed to watch resource"`, `"failed to start watcher"`
+  - `"failed to sync"`, `"failed to run warmup"`, `"failed to load certificate"`
+  - `"failed to update lock"`, `"failed to process request"`
+  - `"failed to check permissions"`, `"failed to scan resource"`, `"failed to fetch data"`
+  - `"failed to substitute variables"`, `"failed calling webhook"`
+  - `"leader election lost"`, `"dropping request"`, `"panic"`
+
 ## [0.13.0] - 2026-02-04
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.12.0...0.13.0)
