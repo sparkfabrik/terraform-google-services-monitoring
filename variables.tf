@@ -91,7 +91,7 @@ variable "kyverno" {
     #   "failed calling webhook", "leader election lost", "dropping request", "panic"
     error_patterns_exclude = optional(list(string), [])
     # List of additional regex message patterns to include (added to default set)
-    # e.g. ["failed to update lease", "failed to connect.*"]
+    # e.g. ["failed to authenticate.", "failed to connect."]
     error_patterns_include = optional(list(string), [])
   })
 
