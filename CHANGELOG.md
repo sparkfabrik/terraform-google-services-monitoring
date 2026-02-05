@@ -17,7 +17,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Kyverno log matching now uses `jsonPayload.message` instead of `jsonPayload.error`**. This provides more precise control over which log messages trigger alerts and enables proper exclusion of specific messages.
   - Error-detail patterns like `"is forbidden"`, `"context deadline exceeded"`, `"timeout"` have been removed as they appear in the `error` field, not the `message` field.
   - Patterns are now specific (e.g., `"failed to update lock"`) instead of generic (e.g., `"failed to update"`) to avoid overlap when excluding.
-  - To migrate: review your `error_patterns_exclude` configuration and update pattern names if needed.
+  - To migrate:
+    - Review your `error_patterns_exclude` and `error_patterns_include` configurations and update pattern names/values if needed so that they correctly match `jsonPayload.message` instead of `jsonPayload.error`.
+    - The variable names remain `error_patterns_exclude` and `error_patterns_include` for backwards compatibility, even though they now operate on the `message` field; no variable renaming is required.
 
 ### Changed
 
