@@ -50,13 +50,13 @@ module "example" {
   kyverno = {
     cluster_name          = "test-cluster"
     notification_channels = []
-    # Exclude specific error patterns from the default set (only affects jsonPayload.error matching)
+    # Exclude specific message patterns from the default set (matches against jsonPayload.message)
     error_patterns_exclude = [
       "failed to start watcher",
       "failed to list resources",
     ]
-    # Add custom regex error patterns to the default set (matched against jsonPayload.error)
-    # Note: These options only support error pattern matching. Arbitrary log filter conditions
+    # Add custom regex message patterns to the default set (matched against jsonPayload.message)
+    # Note: These options only support message pattern matching. Arbitrary log filter conditions
     # (e.g., negative filters like -textPayload:"...") are not supported.
     # error_patterns_include = [
     #   "my custom.*error",
