@@ -46,7 +46,7 @@ resource "google_monitoring_alert_policy" "memorystore_instance_cpu" {
   for_each = local.memorystore_instance_cpu_utilization
 
   project      = local.memorystore_project
-  display_name = "${local.memorystore_project} ${each.value.instance} - Instance CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
+  display_name = "Memorystore ${element(reverse(split("/", each.value.instance)), 0)} CPU utilization ${each.value.severity} > ${each.value.threshold * 100}%"
   combiner     = "OR"
   severity     = each.value.severity
 
@@ -76,7 +76,7 @@ resource "google_monitoring_alert_policy" "memorystore_instance_cpu" {
         count = 1
       }
     }
-    display_name = "${local.memorystore_project} ${each.value.instance} - Instance CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
+    display_name = "Memorystore ${element(reverse(split("/", each.value.instance)), 0)} CPU utilization ${each.value.severity} > ${each.value.threshold * 100}%"
   }
 
   notification_channels = local.memorystore_notification_channels
@@ -93,7 +93,7 @@ resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
   for_each = local.memorystore_cluster_cpu_utilization
 
   project      = local.memorystore_project
-  display_name = "${local.memorystore_project} ${each.value.cluster} - Cluster CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
+  display_name = "Memorystore ${element(reverse(split("/", each.value.cluster)), 0)} CPU utilization ${each.value.severity} > ${each.value.threshold * 100}%"
   combiner     = "OR"
   severity     = each.value.severity
 
@@ -123,7 +123,7 @@ resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
         count = 1
       }
     }
-    display_name = "${local.memorystore_project} ${each.value.cluster} - Cluster CPU utilization ${each.value.severity} ${each.value.threshold * 100}%"
+    display_name = "Memorystore ${element(reverse(split("/", each.value.cluster)), 0)} CPU utilization ${each.value.severity} > ${each.value.threshold * 100}%"
   }
 
   notification_channels = local.memorystore_notification_channels
