@@ -53,10 +53,9 @@ resource "google_monitoring_alert_policy" "memorystore_instance_cpu" {
   conditions {
     condition_threshold {
       filter = <<-EOT
-        resource.type="redis.googleapis.com/Instance"
-        AND resource.labels.project_id="${local.memorystore_project}"
-        AND resource.labels.instance_id="${each.value.instance}"
-        AND metric.type="redis.googleapis.com/stats/cpu_utilization"
+        resource.type = "redis_instance"
+        AND resource.labels.instance_id = "${each.value.instance}"
+        AND metric.type = "redis.googleapis.com/stats/cpu_utilization_main_thread"
       EOT
 
       comparison      = "COMPARISON_GT"
@@ -64,8 +63,13 @@ resource "google_monitoring_alert_policy" "memorystore_instance_cpu" {
       duration        = each.value.duration
 
       aggregations {
-        alignment_period   = each.value.alignment_period
-        per_series_aligner = "ALIGN_MEAN"
+        alignment_period     = each.value.alignment_period
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields = [
+          "resource.label.instance_id",
+          "resource.label.node_id",
+        ]
       }
 
       trigger {
@@ -96,10 +100,9 @@ resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
   conditions {
     condition_threshold {
       filter = <<-EOT
-        resource.type="redis.googleapis.com/Cluster"
-        AND resource.labels.project_id="${local.memorystore_project}"
-        AND resource.labels.cluster_id="${each.value.cluster}"
-        AND metric.type="redis.googleapis.com/cluster/stats/cpu_utilization"
+        resource.type = "redis_cluster"
+        AND resource.labels.cluster_id = "${each.value.cluster}"
+        AND metric.type = "redis.googleapis.com/cluster/stats/cpu_utilization"
       EOT
 
       comparison      = "COMPARISON_GT"
@@ -107,8 +110,13 @@ resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
       duration        = each.value.duration
 
       aggregations {
-        alignment_period   = each.value.alignment_period
-        per_series_aligner = "ALIGN_MEAN"
+        alignment_period     = each.value.alignment_period
+        per_series_aligner   = "ALIGN_RATE"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields = [
+          "resource.label.cluster_id",
+          "resource.label.node_id",
+        ]
       }
 
       trigger {
