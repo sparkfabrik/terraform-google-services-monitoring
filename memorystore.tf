@@ -6,7 +6,7 @@ locals {
 
   memorystore_notification_channels = var.memorystore.notification_enabled ? (length(var.memorystore.notification_channels) > 0 ? var.memorystore.notification_channels : var.notification_channels) : []
 
-  memorystore_instance_cpu_utilization = {
+  memorystore_instance_cpu_utilization = var.memorystore.enabled ? {
     for item in flatten(
       [
         for instance, instance_config in var.memorystore.instances : [
@@ -20,9 +20,9 @@ locals {
         ]
       ]
     ) : "${item.instance}--${item.severity}--${item.threshold}" => item
-  }
+  } : {}
 
-  memorystore_cluster_cpu_utilization = {
+  memorystore_cluster_cpu_utilization = var.memorystore.enabled ? {
     for item in flatten(
       [
         for cluster, cluster_config in var.memorystore.clusters : [
@@ -36,7 +36,7 @@ locals {
         ]
       ]
     ) : "${item.cluster}--${item.severity}--${item.threshold}" => item
-  }
+  } : {}
 }
 
 # ----------------------

@@ -326,13 +326,8 @@ variable "memorystore" {
         duration         = optional(string, "300s")
         })), [
         {
-          threshold = 0.80,
-          duration  = "300s",
-        },
-        {
           severity  = "CRITICAL",
           threshold = 0.90,
-          duration  = "300s",
         }
       ])
     })), {})
@@ -345,13 +340,8 @@ variable "memorystore" {
         duration         = optional(string, "300s")
         })), [
         {
-          threshold = 0.80,
-          duration  = "300s",
-        },
-        {
           severity  = "CRITICAL",
           threshold = 0.90,
-          duration  = "300s",
         }
       ])
     })), {})
