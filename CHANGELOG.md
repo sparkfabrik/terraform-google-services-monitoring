@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- refs platform/#3911: add CPU utilization monitoring alerts for Redis instances and clusters
+- refs platform/#3911: add CPU utilization and Memory usage monitoring alerts for Redis instances and clusters
 
 ## [0.14.0] - 2026-02-05
 

@@ -37,6 +37,38 @@ locals {
       ]
     ) : "${item.cluster}--${item.severity}--${item.threshold}" => item
   } : {}
+
+  memorystore_instance_memory_utilization = var.memorystore.enabled ? {
+    for item in flatten(
+      [
+        for instance, instance_config in var.memorystore.instances : [
+          for memory_utilization in instance_config.memory_utilization :
+          merge(
+            {
+              "instance" : instance,
+            },
+            memory_utilization
+          )
+        ]
+      ]
+    ) : "${item.instance}--${item.severity}--${item.threshold}" => item
+  } : {}
+
+  memorystore_cluster_memory_utilization = var.memorystore.enabled ? {
+    for item in flatten(
+      [
+        for cluster, cluster_config in var.memorystore.clusters : [
+          for memory_utilization in cluster_config.memory_utilization :
+          merge(
+            {
+              "cluster" : cluster,
+            },
+            memory_utilization
+          )
+        ]
+      ]
+    ) : "${item.cluster}--${item.severity}--${item.threshold}" => item
+  } : {}
 }
 
 # ----------------------
@@ -87,6 +119,48 @@ resource "google_monitoring_alert_policy" "memorystore_instance_cpu" {
 }
 
 # ----------------------
+# Memorystore Redis Instance Memory Utilization
+# ----------------------
+resource "google_monitoring_alert_policy" "memorystore_instance_memory" {
+  for_each = local.memorystore_instance_memory_utilization
+
+  project      = local.memorystore_project
+  display_name = "Memorystore ${element(reverse(split("/", each.value.instance)), 0)} Memory utilization ${each.value.severity} > ${each.value.threshold * 100}%"
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    condition_threshold {
+      filter = <<-EOT
+        resource.type = "redis_instance"
+        AND resource.labels.instance_id = "${each.value.instance}"
+        AND metric.type = "redis.googleapis.com/stats/memory/system_memory_usage_ratio"
+      EOT
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+    display_name = "Memorystore ${element(reverse(split("/", each.value.instance)), 0)} Memory utilization ${each.value.severity} > ${each.value.threshold * 100}%"
+  }
+
+  notification_channels = local.memorystore_notification_channels
+
+  alert_strategy {
+    auto_close = var.memorystore.auto_close
+  }
+}
+
+# ----------------------
 # Memorystore Redis Cluster CPU Utilization
 # ----------------------
 resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
@@ -124,6 +198,48 @@ resource "google_monitoring_alert_policy" "memorystore_cluster_cpu" {
       }
     }
     display_name = "Memorystore ${element(reverse(split("/", each.value.cluster)), 0)} CPU utilization ${each.value.severity} > ${each.value.threshold * 100}%"
+  }
+
+  notification_channels = local.memorystore_notification_channels
+
+  alert_strategy {
+    auto_close = var.memorystore.auto_close
+  }
+}
+
+# ----------------------
+# Memorystore Redis Cluster Memory Utilization
+# ----------------------
+resource "google_monitoring_alert_policy" "memorystore_cluster_memory" {
+  for_each = local.memorystore_cluster_memory_utilization
+
+  project      = local.memorystore_project
+  display_name = "Memorystore ${element(reverse(split("/", each.value.cluster)), 0)} Memory utilization ${each.value.severity} > ${each.value.threshold * 100}%"
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    condition_threshold {
+      filter = <<-EOT
+        resource.type = "redis_cluster"
+        AND resource.labels.cluster_id = "${each.value.cluster}"
+        AND metric.type = "redis.googleapis.com/cluster/stats/memory/system_memory_usage_ratio"
+      EOT
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+    display_name = "Memorystore ${element(reverse(split("/", each.value.cluster)), 0)} Memory utilization ${each.value.severity} > ${each.value.threshold * 100}%"
   }
 
   notification_channels = local.memorystore_notification_channels

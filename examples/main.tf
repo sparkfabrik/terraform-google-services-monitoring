@@ -125,10 +125,7 @@ module "example" {
           }
         ]
       }
-      "my-redis-instance-2" = {
-        # Use default thresholds (WARNING at 80%, CRITICAL at 90%)
-        cpu_utilization = []
-      }
+      "my-redis-instance-2" = {}
     }
 
     clusters = {
@@ -137,11 +134,6 @@ module "example" {
           {
             threshold = 0.85
             duration  = "600s"
-          },
-          {
-            severity  = "CRITICAL"
-            threshold = 0.95
-            duration  = "300s"
           }
         ]
       }

@@ -324,10 +324,17 @@ variable "memorystore" {
         threshold        = optional(number, 0.80)
         alignment_period = optional(string, "300s")
         duration         = optional(string, "300s")
+        })), []
+      )
+      memory_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
         })), [
         {
           severity  = "CRITICAL",
-          threshold = 0.90,
+          threshold = 0.80,
         }
       ])
     })), {})
@@ -338,10 +345,17 @@ variable "memorystore" {
         threshold        = optional(number, 0.80)
         alignment_period = optional(string, "300s")
         duration         = optional(string, "300s")
+        })), []
+      )
+      memory_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
         })), [
         {
           severity  = "CRITICAL",
-          threshold = 0.90,
+          threshold = 0.80,
         }
       ])
     })), {})
