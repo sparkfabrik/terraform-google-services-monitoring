@@ -125,6 +125,7 @@ module "example" {
           }
         ]
       }
+      # Use default thresholds (memory_utilization CRITICAL at 80%)
       "my-redis-instance-2" = {}
     }
 

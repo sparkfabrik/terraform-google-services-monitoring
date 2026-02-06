@@ -309,7 +309,7 @@ variable "litellm" {
 }
 
 variable "memorystore" {
-  description = "Configuration for GCP Memorystore (Redis) CPU monitoring alerts. Supports both Redis instances and Redis clusters with multiple threshold levels. Each resource is identified by its name (map key)."
+  description = "Configuration for GCP Memorystore (Redis) CPU and memory utilization monitoring alerts. Supports both Redis instances and Redis clusters with multiple threshold levels. Each resource is identified by its name (map key)."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
