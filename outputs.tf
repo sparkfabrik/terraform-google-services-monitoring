@@ -10,6 +10,14 @@ output "cloud_sql_cpu_utilization" {
   value = { for k, v in google_monitoring_alert_policy.cloud_sql_cpu_utilization : k => v.name }
 }
 
+output "memorystore_instance_cpu_utilization" {
+  value = { for k, v in google_monitoring_alert_policy.memorystore_instance_cpu : k => v.name }
+}
+
+output "memorystore_cluster_cpu_utilization" {
+  value = { for k, v in google_monitoring_alert_policy.memorystore_cluster_cpu : k => v.name }
+}
+
 output "ssl_alert_policy_names" {
   value = { for days, alert in google_monitoring_alert_policy.ssl_expiring_days : days => alert.name }
 }

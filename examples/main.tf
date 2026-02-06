@@ -104,4 +104,47 @@ module "example" {
       }
     }
   }
+  memorystore = {
+    enabled    = true
+    project_id = "my-gcp-project"
+
+    instances = {
+      "my-redis-instance-1" = {
+        cpu_utilization = [
+          {
+            severity         = "WARNING"
+            threshold        = 0.80
+            alignment_period = "300s"
+            duration         = "300s"
+          },
+          {
+            severity         = "CRITICAL"
+            threshold        = 0.90
+            alignment_period = "300s"
+            duration         = "300s"
+          }
+        ]
+      }
+      "my-redis-instance-2" = {
+        # Use default thresholds (WARNING at 80%, CRITICAL at 90%)
+        cpu_utilization = []
+      }
+    }
+
+    clusters = {
+      "my-redis-cluster-1" = {
+        cpu_utilization = [
+          {
+            threshold = 0.85
+            duration  = "600s"
+          },
+          {
+            severity  = "CRITICAL"
+            threshold = 0.95
+            duration  = "300s"
+          }
+        ]
+      }
+    }
+  }
 }

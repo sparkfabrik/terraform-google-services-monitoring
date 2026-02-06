@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-02-09
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.14.0...0.15.0)
+
+### Added
+
+- refs platform/#3911: add CPU utilization monitoring alerts for Redis instances and clusters
+
 ## [0.14.0] - 2026-02-05
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.13.0...0.14.0)
