@@ -5,33 +5,31 @@ This module creates a set of monitoring alerts for Google Cloud Platform service
 Supported services:
 
 - Cloud SQL
-
   - CPU usage
   - Storage usage
   - Memory usage
 
-- Kyverno
+- Memorystore
+  - CPU utilization alerts for Redis instances and Redis clusters
+  - Memory (system memory usage ratio) alerts for Redis instances and Redis clusters
 
+- Kyverno
   - Error logs for admission-controller, background-controller, cleanup-controller, reports-controller
 
 - cert-manager
-
   - Error logs for cert-manager controller when an Issuer or ClusterIssuer is missing
 
 - Konnectivity agent
-
   - Alert when no pods are available for the konnectivity-agent deployment
-- SSL certificate expiration
 
+- SSL certificate expiration
   - SSL certificate expiry alerts for monitored endpoints
 
 - Typesense
-
   - Uptime checks for HTTP endpoints
   - Pod restart alerts for Typesense containers
 
 - LiteLLM
-
   - Uptime checks for HTTP endpoints
   - Pod restart alerts for LiteLLM containers
 
@@ -40,7 +38,7 @@ Supported services:
 
 | Name | Version |
 |------|---------|
-| <a name="provider_google"></a> [google](#provider\_google) | >= 5.10 |
+| <a name="provider_google"></a> [google](#provider\_google) | 7.18.0 |
 
 ## Requirements
 
@@ -58,6 +56,7 @@ Supported services:
 | <a name="input_konnectivity_agent"></a> [konnectivity\_agent](#input\_konnectivity\_agent) | Configuration for Konnectivity agent deployment replica alert in GKE. Triggers when there are no available replicas. | <pre>object({<br/>    enabled               = optional(bool, true)<br/>    cluster_name          = optional(string, null)<br/>    project_id            = optional(string, null)<br/>    namespace             = optional(string, "kube-system")<br/>    deployment_name       = optional(string, "konnectivity-agent")<br/>    duration_seconds      = optional(number, 60)<br/>    auto_close_seconds    = optional(number, 3600)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    notification_prompts  = optional(list(string), null)<br/>  })</pre> | `{}` | no |
 | <a name="input_kyverno"></a> [kyverno](#input\_kyverno) | Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, message pattern inclusions/exclusions for jsonPayload.message matching, and namespace. | <pre>object({<br/>    enabled               = optional(bool, true)<br/>    cluster_name          = optional(string, null)<br/>    project_id            = optional(string, null)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts<br/>    logmatch_notification_rate_limit = optional(string, "300s")<br/>    alert_documentation              = optional(string, null)<br/>    auto_close_seconds               = optional(number, 3600)<br/>    namespace                        = optional(string, "kyverno")<br/>    # List of message patterns to exclude from the default set (matches against jsonPayload.message).<br/>    # Default patterns available for exclusion:<br/>    #   "failed to list resources", "failed to watch resource", "failed to start watcher",<br/>    #   "failed to sync", "failed to run warmup", "failed to load certificate",<br/>    #   "failed to update lock", "failed to process request", "failed to check permissions",<br/>    #   "failed to scan resource", "failed to fetch data", "failed to substitute variables",<br/>    #   "failed calling webhook", "leader election lost", "dropping request", "panic"<br/>    error_patterns_exclude = optional(list(string), [])<br/>    # List of additional regex message patterns to include (added to default set)<br/>    # e.g. ["failed to authenticate.", "failed to connect."]<br/>    error_patterns_include = optional(list(string), [])<br/>  })</pre> | `{}` | no |
 | <a name="input_litellm"></a> [litellm](#input\_litellm) | Configuration for LiteLLM monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key). | <pre>object({<br/>    enabled               = optional(bool, false)<br/>    project_id            = optional(string, null)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    cluster_name          = optional(string, null)<br/><br/>    apps = optional(map(object({<br/>      uptime_check = optional(object({<br/>        enabled = optional(bool, true)<br/>        host    = string<br/>        path    = optional(string, "/health/readiness")<br/>      }), null)<br/><br/>      container_check = optional(object({<br/>        enabled   = optional(bool, true)<br/>        namespace = string<br/>        pod_restart = optional(object({<br/>          threshold            = optional(number, 0)<br/>          alignment_period     = optional(number, 60)<br/>          duration             = optional(number, 180)<br/>          auto_close_seconds   = optional(number, 3600)<br/>          notification_prompts = optional(list(string), null)<br/>        }), {})<br/>      }), null)<br/>    })), {})<br/>  })</pre> | `{}` | no |
+| <a name="input_memorystore"></a> [memorystore](#input\_memorystore) | Configuration for GCP Memorystore (Redis) CPU monitoring alerts. Supports both Redis instances and Redis clusters with multiple threshold levels. Each resource is identified by its name (map key). | <pre>object({<br/>    enabled               = optional(bool, false)<br/>    project_id            = optional(string, null)<br/>    auto_close            = optional(string, "86400s") # default 24h<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/><br/>    instances = optional(map(object({<br/>      cpu_utilization = optional(list(object({<br/>        severity         = optional(string, "WARNING")<br/>        threshold        = optional(number, 0.80)<br/>        alignment_period = optional(string, "300s")<br/>        duration         = optional(string, "300s")<br/>        })), []<br/>      )<br/>      memory_utilization = optional(list(object({<br/>        severity         = optional(string, "WARNING")<br/>        threshold        = optional(number, 0.80)<br/>        alignment_period = optional(string, "300s")<br/>        duration         = optional(string, "300s")<br/>        })), [<br/>        {<br/>          severity  = "CRITICAL",<br/>          threshold = 0.80,<br/>        }<br/>      ])<br/>    })), {})<br/><br/>    clusters = optional(map(object({<br/>      cpu_utilization = optional(list(object({<br/>        severity         = optional(string, "WARNING")<br/>        threshold        = optional(number, 0.80)<br/>        alignment_period = optional(string, "300s")<br/>        duration         = optional(string, "300s")<br/>        })), []<br/>      )<br/>      memory_utilization = optional(list(object({<br/>        severity         = optional(string, "WARNING")<br/>        threshold        = optional(number, 0.80)<br/>        alignment_period = optional(string, "300s")<br/>        duration         = optional(string, "300s")<br/>        })), [<br/>        {<br/>          severity  = "CRITICAL",<br/>          threshold = 0.80,<br/>        }<br/>      ])<br/>    })), {})<br/>  })</pre> | `{}` | no |
 | <a name="input_notification_channels"></a> [notification\_channels](#input\_notification\_channels) | List of notification channel IDs to notify when an alert is triggered | `list(string)` | `[]` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The Google Cloud project ID where logging exclusions will be created | `string` | n/a | yes |
 | <a name="input_ssl_alert"></a> [ssl\_alert](#input\_ssl\_alert) | Configuration for SSL certificate expiration alerts. Allows customization of project, notification channels, alert thresholds, and user labels. | <pre>object({<br/>    enabled               = optional(bool, false)<br/>    project_id            = optional(string, null)<br/>    notification_enabled  = optional(bool, true)<br/>    notification_channels = optional(list(string), [])<br/>    threshold_days        = optional(list(number), [15, 7])<br/>    user_labels           = optional(map(string), {})<br/>  })</pre> | `{}` | no |
@@ -70,6 +69,10 @@ Supported services:
 | <a name="output_cloud_sql_cpu_utilization"></a> [cloud\_sql\_cpu\_utilization](#output\_cloud\_sql\_cpu\_utilization) | n/a |
 | <a name="output_cloud_sql_disk_utilization"></a> [cloud\_sql\_disk\_utilization](#output\_cloud\_sql\_disk\_utilization) | n/a |
 | <a name="output_cloud_sql_memory_utilization"></a> [cloud\_sql\_memory\_utilization](#output\_cloud\_sql\_memory\_utilization) | n/a |
+| <a name="output_memorystore_cluster_cpu_utilization"></a> [memorystore\_cluster\_cpu\_utilization](#output\_memorystore\_cluster\_cpu\_utilization) | n/a |
+| <a name="output_memorystore_cluster_memory_utilization"></a> [memorystore\_cluster\_memory\_utilization](#output\_memorystore\_cluster\_memory\_utilization) | n/a |
+| <a name="output_memorystore_instance_cpu_utilization"></a> [memorystore\_instance\_cpu\_utilization](#output\_memorystore\_instance\_cpu\_utilization) | n/a |
+| <a name="output_memorystore_instance_memory_utilization"></a> [memorystore\_instance\_memory\_utilization](#output\_memorystore\_instance\_memory\_utilization) | n/a |
 | <a name="output_ssl_alert_policy_names"></a> [ssl\_alert\_policy\_names](#output\_ssl\_alert\_policy\_names) | n/a |
 
 ## Resources
@@ -83,6 +86,10 @@ Supported services:
 | [google_monitoring_alert_policy.konnectivity_agent_replicas](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.kyverno_logmatch_alert](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.litellm_pod_restart](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
+| [google_monitoring_alert_policy.memorystore_cluster_cpu](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
+| [google_monitoring_alert_policy.memorystore_cluster_memory](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
+| [google_monitoring_alert_policy.memorystore_instance_cpu](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
+| [google_monitoring_alert_policy.memorystore_instance_memory](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.ssl_expiring_days](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 | [google_monitoring_alert_policy.typesense_pod_restart](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/monitoring_alert_policy) | resource |
 

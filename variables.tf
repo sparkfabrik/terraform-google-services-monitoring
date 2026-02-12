@@ -308,6 +308,76 @@ variable "litellm" {
   }
 }
 
+variable "memorystore" {
+  description = "Configuration for GCP Memorystore (Redis) CPU and memory utilization monitoring alerts. Supports both Redis instances and Redis clusters with multiple threshold levels. Each resource is identified by its name (map key)."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    auto_close            = optional(string, "86400s") # default 24h
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+
+    instances = optional(map(object({
+      cpu_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+        })), []
+      )
+      memory_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+        })), [
+        {
+          severity  = "CRITICAL",
+          threshold = 0.80,
+        }
+      ])
+    })), {})
+
+    clusters = optional(map(object({
+      cpu_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+        })), []
+      )
+      memory_utilization = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 0.80)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+        })), [
+        {
+          severity  = "CRITICAL",
+          threshold = 0.80,
+        }
+      ])
+    })), {})
+  })
+
+  validation {
+    condition = alltrue([
+      for instance_name, config in var.memorystore.instances :
+      trimspace(instance_name) != ""
+    ])
+    error_message = "Each instance must have a non-empty name (map key)."
+  }
+
+  validation {
+    condition = alltrue([
+      for cluster_name, config in var.memorystore.clusters :
+      trimspace(cluster_name) != ""
+    ])
+    error_message = "Each cluster must have a non-empty name (map key)."
+  }
+}
+
 variable "ssl_alert" {
   description = "Configuration for SSL certificate expiration alerts. Allows customization of project, notification channels, alert thresholds, and user labels."
   default     = {}
