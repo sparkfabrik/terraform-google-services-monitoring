@@ -141,7 +141,6 @@ resource "google_logging_metric" "typesense_log_flood" {
     AND resource.labels.project_id="${local.typesense_project}"
     AND resource.labels.cluster_name="${var.typesense.cluster_name}"
     AND resource.labels.namespace_name="${each.value.namespace}"
-    AND resource.labels.container_name="typesense"
   EOT
 
   metric_descriptor {

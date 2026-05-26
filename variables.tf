@@ -246,7 +246,7 @@ variable "typesense" {
       flood_check = optional(object({
         enabled                      = optional(bool, true)
         namespace                    = string
-        threshold_entries_per_minute = number
+        threshold_entries_per_minute = optional(number, 1000)
         alignment_period_seconds     = optional(number, 60)
         duration_seconds             = optional(number, 300)
         auto_close_seconds           = optional(number, 86400)
