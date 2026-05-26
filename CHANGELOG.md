@@ -8,6 +8,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `AGENTS.md` with coding-agent instructions for this module.
+- `CLAUDE.md` symlink to `AGENTS.md`.
+- OpenSpec toolkit updates under `.github/prompts/`, `.github/skills/`, `.claude/`, and `.opencode/`.
+
+## [0.16.0] - 2026-05-26
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.15.0...0.16.0)
+
+### Added
+
+- Typesense `log_check` alert on Cloud Logging entries from the Typesense container at or above `min_severity` (default `ERROR`).
+- Typesense `flood_check` alert that detects log-flooding failure modes (e.g. Raft consensus storms) via a `google_logging_metric` counting container log entries, with a threshold on entries-per-minute.
+- Outputs `typesense_logmatch_alert_policy_names` and `typesense_flood_alert_policy_names`.
+- OpenSpec change-management scaffolding under `openspec/`.
+
+### Changed
+
+- Typesense validation: when any app sets `container_check`, `log_check`, or `flood_check`, `cluster_name` is required and each check needs a non-empty `namespace`.
+
 ## [0.15.0] - 2026-02-09
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.14.0...0.15.0)
