@@ -41,11 +41,11 @@ The immediate consumer is the Luiss project (`sito-luiss` GCP project), which ru
 
 **Rationale:** A user-defined log metric is the only GCP primitive that allows namespace + container-scoped volume counting. Cost is negligible (~345 KB/month of metric data per time series, within the 150 MiB free tier per billing account).
 
-### 3. Threshold expressed in entries per minute (required, no default)
+### 3. Threshold expressed in entries per minute (default: 1000)
 
-**Choice:** `flood_check.threshold_entries_per_minute` is a required field with no default value.
+**Choice:** `flood_check.threshold_entries_per_minute` defaults to `1000` entries per minute.
 
-**Rationale:** From the #4258 incident data (caleffi-production-cluster, Apr 1–3 2026): normal Typesense log volume was ~400–800 entries/minute project-wide; the storm peaked at ~7,000–13,000 entries/minute from the Typesense namespace alone. A safe threshold is ~3,000 entries/minute for that project, but this is environment-specific. A wrong default (too high = misses the storm; too low = constant noise) is worse than requiring explicit configuration. Operators must set a value that makes sense for their baseline.
+**Rationale:** From the #4258 incident data (caleffi-production-cluster, Apr 1–3 2026): normal Typesense log volume was ~400–800 entries/minute project-wide; the storm peaked at ~7,000–13,000 entries/minute from the Typesense namespace alone. A default of `1000` is a reasonable general-purpose threshold that catches volume well above normal (~800) while avoiding noise during minor spikes. Operators with different baselines should override.
 
 ### 4. Independent `namespace` field on `flood_check`
 
@@ -53,11 +53,11 @@ The immediate consumer is the Luiss project (`sito-luiss` GCP project), which ru
 
 **Rationale:** Consistent with the `log_check` design decision. Explicit over implicit; not every app will have all three checks configured.
 
-### 5. Filter scoped to `container_name="typesense"`
+### 5. Filter scoping for `container_name`
 
-**Choice:** Both `log_check` and `flood_check` filters include `resource.labels.container_name="typesense"`.
+**Choice:** Only `log_check` includes `resource.labels.container_name="typesense"` in its filter. The `flood_check` metric intentionally omits it — counting all containers in the namespace.
 
-**Rationale:** Typesense pods may have sidecar containers. Filtering by container name prevents sidecar logs from polluting the signal.
+**Rationale:** For error alerting (`log_check`), scoping to the typesense container prevents sidecar noise from triggering false alerts. For flood detection (`flood_check`), the goal is to catch overall log volume spikes in the namespace — sidecar log storms are equally relevant for billing protection, so counting all containers gives better coverage.
 
 ## Risks / Trade-offs
 
@@ -67,7 +67,7 @@ The immediate consumer is the Luiss project (`sito-luiss` GCP project), which ru
 
 - **[Trade-off] No message pattern filtering on `log_check`** → Keeps the interface simple but means all errors trigger the alert equally. A Kyverno-style `error_patterns_include/exclude` can be added in a future iteration without breaking changes.
 
-- **[Risk] Wrong `flood_check` threshold causes alert noise or misses the storm** → Mitigation: Threshold is required with no default, forcing operators to set an environment-specific value. The #4258 incident data provides a concrete reference: ~3,000 entries/minute is a reasonable starting point for a Typesense cluster that peaks at ~800 entries/minute under normal conditions.
+- **[Risk] Wrong `flood_check` threshold causes alert noise or misses the storm** → Mitigation: Default of 1000 entries/min is based on #4258 incident data (~800 entries/min normal baseline). Operators with higher baselines should override. The #4258 incident data provides a concrete reference: ~3,000 entries/minute is appropriate for a Typesense cluster that peaks at ~800 entries/minute under normal conditions.
 
 - **[Risk] `google_logging_metric` has ~1 minute propagation delay** → The flood alert may fire 1–2 minutes after the storm starts. Acceptable for the billing-protection use case where the relevant timescale is hours, not seconds.
 
