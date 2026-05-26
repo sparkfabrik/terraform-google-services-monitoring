@@ -94,12 +94,12 @@ The module SHALL expose an output `typesense_logmatch_alert_policy_names` mappin
 
 ### Requirement: Log-based metric per Typesense app with flood_check
 
-The module SHALL create a `google_logging_metric` counter resource for each Typesense app that has `flood_check` configured and enabled. The metric SHALL count all log entries from the `typesense` container in the configured namespace and cluster.
+The module SHALL create a `google_logging_metric` counter resource for each Typesense app that has `flood_check` configured and enabled. The metric SHALL count all log entries from all containers in the configured namespace and cluster (not scoped to `container_name`).
 
 #### Scenario: flood_check enabled
 
 - **WHEN** a Typesense app has `flood_check = { namespace = "typesense-stage", threshold_entries_per_minute = 3000 }` configured
-- **THEN** the module creates a `google_logging_metric` with a filter scoped to `resource.type="k8s_container"`, `cluster_name`, `namespace_name="typesense-stage"`, and `container_name="typesense"`
+- **THEN** the module creates a `google_logging_metric` with a filter scoped to `resource.type="k8s_container"`, `cluster_name`, and `namespace_name="typesense-stage"` (no `container_name` filter — counts all containers in the namespace)
 
 #### Scenario: flood_check disabled
 
@@ -120,14 +120,19 @@ The module SHALL create a `google_monitoring_alert_policy` with a `condition_thr
 - **WHEN** the log entry rate from the Typesense container exceeds `threshold_entries_per_minute` for the configured `duration`
 - **THEN** the alert policy fires and an incident is opened
 
-### Requirement: threshold_entries_per_minute is required
+### Requirement: threshold_entries_per_minute defaults to 1000
 
-The `flood_check.threshold_entries_per_minute` field SHALL be required with no default value. Operators must explicitly set a value appropriate for their environment.
+The `flood_check.threshold_entries_per_minute` field SHALL default to `1000` entries per minute. Operators SHOULD override with a value appropriate for their environment's baseline log volume.
 
-#### Scenario: Missing threshold
+#### Scenario: Default threshold
 
-- **WHEN** `flood_check` is configured without `threshold_entries_per_minute`
-- **THEN** Terraform validation or plan fails with an error indicating the field is required
+- **WHEN** `flood_check` is configured without specifying `threshold_entries_per_minute`
+- **THEN** the threshold defaults to `1000` entries per minute
+
+#### Scenario: Custom threshold
+
+- **WHEN** `flood_check = { namespace = "ts-ns", threshold_entries_per_minute = 3000 }` is configured
+- **THEN** the alert fires when the log rate exceeds `3000` entries per minute
 
 ### Requirement: Configurable flood_check alignment and duration
 
