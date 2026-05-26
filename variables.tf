@@ -234,6 +234,24 @@ variable "typesense" {
           notification_prompts = optional(list(string), null)
         }), {})
       }), null)
+
+      log_check = optional(object({
+        enabled                          = optional(bool, true)
+        namespace                        = string
+        min_severity                     = optional(string, "ERROR")
+        logmatch_notification_rate_limit = optional(string, "300s")
+        auto_close_seconds               = optional(number, 3600)
+      }), null)
+
+      flood_check = optional(object({
+        enabled                      = optional(bool, true)
+        namespace                    = string
+        threshold_entries_per_minute = optional(number, 1000)
+        alignment_period_seconds     = optional(number, 60)
+        duration_seconds             = optional(number, 300)
+        auto_close_seconds           = optional(number, 86400)
+        notification_rate_limit      = optional(string, "3600s")
+      }), null)
     })), {})
   })
 
@@ -242,18 +260,20 @@ variable "typesense" {
       for app_name, config in var.typesense.apps : (
         trimspace(app_name) != "" &&
         (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
-        (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true)
+        (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true) &&
+        (config.log_check != null ? try(trimspace(config.log_check.namespace), "") != "" : true) &&
+        (config.flood_check != null ? try(trimspace(config.flood_check.namespace), "") != "" : true)
       )
     ])
-    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check is provided, 'namespace' must be non-empty."
+    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check is provided, 'namespace' must be non-empty. If log_check is provided, 'namespace' must be non-empty. If flood_check is provided, 'namespace' must be non-empty."
   }
 
   validation {
     condition = (
-      length([for app_name, config in var.typesense.apps : app_name if config.container_check != null]) == 0 ||
+      length([for app_name, config in var.typesense.apps : app_name if config.container_check != null || config.log_check != null || config.flood_check != null]) == 0 ||
       try(trimspace(var.typesense.cluster_name), "") != ""
     )
-    error_message = "When any app has container_check configured, 'cluster_name' must be provided at the typesense level."
+    error_message = "When any app has container_check, log_check, or flood_check configured, 'cluster_name' must be provided at the typesense level."
   }
 }
 

@@ -82,6 +82,22 @@ module "example" {
             threshold = 1
           }
         }
+        log_check = {
+          enabled                          = true
+          namespace                        = "typesense"
+          min_severity                     = "ERROR"
+          logmatch_notification_rate_limit = "300s"
+          auto_close_seconds               = 3600
+        }
+        flood_check = {
+          enabled                      = true
+          namespace                    = "typesense"
+          threshold_entries_per_minute = 3000
+          alignment_period_seconds     = 60
+          duration_seconds             = 300
+          auto_close_seconds           = 86400
+          notification_rate_limit      = "3600s"
+        }
       }
     }
   }

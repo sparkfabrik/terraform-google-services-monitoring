@@ -29,3 +29,11 @@ output "memorystore_cluster_memory_utilization" {
 output "ssl_alert_policy_names" {
   value = { for days, alert in google_monitoring_alert_policy.ssl_expiring_days : days => alert.name }
 }
+
+output "typesense_logmatch_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_logmatch_alert : k => v.name }
+}
+
+output "typesense_flood_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_flood_alert : k => v.name }
+}
