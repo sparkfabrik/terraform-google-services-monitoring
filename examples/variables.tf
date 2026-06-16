@@ -31,30 +31,27 @@ variable "kyverno" {
     }), {})
 
     service_errors_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 5)
-      alignment_period        = optional(number, 600)
-      duration                = optional(number, 0)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "300s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 5)
+      alignment_period   = optional(number, 600)
+      duration           = optional(number, 0)
+      auto_close_seconds = optional(number, 3600)
     }), {})
 
     volume_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 10)
-      alignment_period        = optional(number, 60)
-      duration                = optional(number, 900)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "3600s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 10)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 900)
+      auto_close_seconds = optional(number, 3600)
     }), {})
 
     engine_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 0)
-      alignment_period        = optional(number, 60)
-      duration                = optional(number, 300)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "3600s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 0)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 300)
+      auto_close_seconds = optional(number, 3600)
     }), {})
 
     dashboard = optional(object({

@@ -93,12 +93,11 @@ variable "kyverno" {
     # Tier 1 — service errors: ERROR logs minus the measured noise classes, minus the engine logger.
     # threshold > value within alignment_period (default > 5 in 10 min).
     service_errors_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 5)
-      alignment_period        = optional(number, 600)
-      duration                = optional(number, 0)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "300s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 5)
+      alignment_period   = optional(number, 600)
+      duration           = optional(number, 0)
+      auto_close_seconds = optional(number, 3600)
       # Noise classes excluded from tier 1, matched on jsonPayload.message OR jsonPayload.error.
       noise_exclusions = optional(list(string), [
         "failed to update lock optimistically",
@@ -119,23 +118,21 @@ variable "kyverno" {
     # Tier 2 — volume catch-all: same source as tier 1, no exclusions, minus the engine logger.
     # threshold > value per alignment_period sustained for duration (default > 10/min for 15 min).
     volume_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 10)
-      alignment_period        = optional(number, 60)
-      duration                = optional(number, 900)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "3600s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 10)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 900)
+      auto_close_seconds = optional(number, 3600)
     }), {})
 
     # Engine — broken policies: engine-logger ERROR logs, one incident per policy.
     # threshold > value sustained for duration (default > 0 for 5 min).
     engine_check = optional(object({
-      enabled                 = optional(bool, true)
-      threshold               = optional(number, 0)
-      alignment_period        = optional(number, 60)
-      duration                = optional(number, 300)
-      auto_close_seconds      = optional(number, 3600)
-      notification_rate_limit = optional(string, "3600s")
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 0)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 300)
+      auto_close_seconds = optional(number, 3600)
     }), {})
 
     # Policy review dashboard (google_monitoring_dashboard). Section A — violated

@@ -162,9 +162,6 @@ resource "google_monitoring_alert_policy" "kyverno_service_errors" {
 
   alert_strategy {
     auto_close = "${var.kyverno.service_errors_check.auto_close_seconds}s"
-    notification_rate_limit {
-      period = var.kyverno.service_errors_check.notification_rate_limit
-    }
   }
 
   depends_on = [google_logging_metric.kyverno_service_errors]
@@ -228,9 +225,6 @@ resource "google_monitoring_alert_policy" "kyverno_error_volume" {
 
   alert_strategy {
     auto_close = "${var.kyverno.volume_check.auto_close_seconds}s"
-    notification_rate_limit {
-      period = var.kyverno.volume_check.notification_rate_limit
-    }
   }
 
   depends_on = [google_logging_metric.kyverno_error_volume]
@@ -266,8 +260,11 @@ resource "google_logging_metric" "kyverno_engine_errors" {
 
 # Engine alert — broken policies, one incident per policy.
 # Groups by the policy label so a newly-broken policy is not masked by one already
-# firing; notification_rate_limit keeps a persistently-broken policy to a single
-# notification rather than a loop.
+# firing. A metric-threshold alert notifies once when the incident opens and stays
+# open while the condition holds (no per-evaluation loop), so a persistently-broken
+# policy such as zambon's tenant-require-resource-limits notifies a single time.
+# (notification_rate_limit is rejected by the API on metric-threshold alerts — it is
+# allowed only on log-based condition_matched_log policies.)
 resource "google_monitoring_alert_policy" "kyverno_engine_errors" {
   count = local.kyverno_enabled && var.kyverno.engine_check.enabled ? 1 : 0
 
@@ -309,9 +306,6 @@ resource "google_monitoring_alert_policy" "kyverno_engine_errors" {
 
   alert_strategy {
     auto_close = "${var.kyverno.engine_check.auto_close_seconds}s"
-    notification_rate_limit {
-      period = var.kyverno.engine_check.notification_rate_limit
-    }
   }
 
   depends_on = [google_logging_metric.kyverno_engine_errors]
