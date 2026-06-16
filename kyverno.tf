@@ -136,7 +136,7 @@ resource "google_monitoring_alert_policy" "kyverno_service_errors" {
     display_name = "Service ERROR count > ${var.kyverno.service_errors_check.threshold}"
 
     condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_service_errors[0].name}\" AND resource.type=\"global\""
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_service_errors[0].name}\""
       comparison      = "COMPARISON_GT"
       threshold_value = var.kyverno.service_errors_check.threshold
       duration        = "${var.kyverno.service_errors_check.duration}s"
@@ -199,7 +199,7 @@ resource "google_monitoring_alert_policy" "kyverno_error_volume" {
     display_name = "ERROR volume > ${var.kyverno.volume_check.threshold}/min sustained"
 
     condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_error_volume[0].name}\" AND resource.type=\"global\""
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_error_volume[0].name}\""
       comparison      = "COMPARISON_GT"
       threshold_value = var.kyverno.volume_check.threshold
       duration        = "${var.kyverno.volume_check.duration}s"
@@ -277,7 +277,7 @@ resource "google_monitoring_alert_policy" "kyverno_engine_errors" {
     display_name = "Engine ERROR count > ${var.kyverno.engine_check.threshold} per policy"
 
     condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_engine_errors[0].name}\" AND resource.type=\"global\""
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.kyverno_engine_errors[0].name}\""
       comparison      = "COMPARISON_GT"
       threshold_value = var.kyverno.engine_check.threshold
       duration        = "${var.kyverno.engine_check.duration}s"
@@ -511,7 +511,7 @@ locals {
                 targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    filter = "metric.type=\"logging.googleapis.com/user/${local.kyverno_engine_metric_name}\" resource.type=\"global\""
+                    filter = "metric.type=\"logging.googleapis.com/user/${local.kyverno_engine_metric_name}\""
                     aggregation = {
                       alignmentPeriod    = "300s"
                       perSeriesAligner   = "ALIGN_DELTA"
