@@ -50,18 +50,11 @@ module "example" {
   kyverno = {
     cluster_name          = "test-cluster"
     notification_channels = []
-    # Exclude specific message patterns from the default set (matches against jsonPayload.message)
-    error_patterns_exclude = [
-      "failed to start watcher",
-      "failed to list resources",
-    ]
-    # Add custom regex message patterns to the default set (matched against jsonPayload.message)
-    # Note: These options only support message pattern matching. Arbitrary log filter conditions
-    # (e.g., negative filters like -textPayload:"...") are not supported.
-    # error_patterns_include = [
-    #   "my custom.*error",
-    #   "failed to connect.*database",
-    # ]
+    # Level-1 restart alert, two-tier service-error alerts and the broken-policy
+    # engine alert are all enabled by default. Thresholds can be overridden per check:
+    # service_errors_check = { threshold = 5 }
+    # volume_check         = { threshold = 10 }
+    # engine_check         = { threshold = 0 }
   }
   cert_manager = {
     cluster_name = "test-cluster"
