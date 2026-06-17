@@ -8,24 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-17
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.16.0...0.17.0)
+
 ### Added
 
 - `AGENTS.md` with coding-agent instructions for this module.
 - `CLAUDE.md` symlink to `AGENTS.md`.
 - OpenSpec toolkit updates under `.github/prompts/`, `.github/skills/`, `.claude/`, and `.opencode/`.
 - Kyverno health alert on the GKE system metric `kubernetes.io/container/restart_count`, scoped to the `kyverno-admission-controller` pods (`restart_check`).
-- Kyverno tier-1 "service errors" alert: a `google_logging_metric` over `severity=ERROR` logs in the kyverno namespace, excluding the engine logger and 12 measured noise classes (matched on `jsonPayload.message` OR `jsonPayload.error`), with a low count threshold (`service_errors_check`).
+- Kyverno tier-1 "service errors" alert: a `google_logging_metric` over `severity=ERROR` logs in the kyverno namespace, excluding the engine logger and a list of measured benign noise classes (matched on `jsonPayload.message` OR `jsonPayload.error`), with a low count threshold (`service_errors_check`).
 - Kyverno tier-2 "volume catch-all" alert: a `google_logging_metric` over the same source with no exclusions (still excluding the engine logger), with a sustained-rate threshold so the exclusion list can never hide a flood (`volume_check`).
 - Kyverno "broken policies" engine alert: a `google_logging_metric` over engine-logger ERROR logs, labeled by `policy` (extracted from `jsonPayload."policy.name"`), with the alert grouped by that label so each broken policy opens its own incident (`engine_check`).
 - Kyverno policy review dashboard (`google_monitoring_dashboard`, the first in this module): Section A counts distinct violating resources from `PolicyViolation` events per policy, per namespace and as a daily trend (Log Analytics SQL widgets); Section B ranks error-producing policies and charts the engine-error rate (`dashboard`).
 
-### Changed
+### Breaking change
 
-- **Breaking:** the `kyverno` variable is restructured. The log-match interface (`error_patterns_include`, `error_patterns_exclude`, `logmatch_notification_rate_limit`) is replaced by per-signal objects (`restart_check`, `service_errors_check`, `volume_check`, `engine_check`, `dashboard`). All Kyverno alerts inherit the module notification channels unless overridden.
-
-### Removed
-
-- **Breaking:** the legacy `kyverno_logmatch_alert` resource and its 16 message patterns. The metric-based alerts above replace it; clusters move atomically on module bump (rollback by pinning the previous version).
+- The `kyverno` variable is restructured. The log-match interface (`error_patterns_include`, `error_patterns_exclude`, `logmatch_notification_rate_limit`) is replaced by per-signal objects (`restart_check`, `service_errors_check`, `volume_check`, `engine_check`, `dashboard`). All Kyverno alerts inherit the module notification channels unless overridden.
+- **Removed:** the legacy `kyverno_logmatch_alert` resource and its 16 message patterns. The metric-based alerts above replace it; clusters move atomically on module bump (rollback by pinning the previous version).
 
 ## [0.16.0] - 2026-05-26
 
