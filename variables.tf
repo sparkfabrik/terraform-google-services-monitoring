@@ -107,11 +107,14 @@ variable "kyverno" {
         "the server is currently unable to handle the request",
         "leader election lost",
         "http: Server closed",
-        "Operation cannot be fulfilled on leases",
+        "Operation cannot be fulfilled on",
         "error reading from server",
         "connection reset by peer",
         "connection force closed",
+        "connection refused",
         "http2: client connection lost",
+        "use of closed network connection",
+        "failed to delete ephemeral report",
       ])
     }), {})
 
