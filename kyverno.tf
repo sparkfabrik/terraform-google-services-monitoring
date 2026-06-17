@@ -107,7 +107,7 @@ resource "google_monitoring_alert_policy" "kyverno_admission_restart" {
 
 # Tier 1 metric — service errors
 # Log-based counter over ERROR logs in the kyverno namespace, excluding the engine
-# logger and the 12 measured noise classes (matched on message OR error). Baseline 0/7d.
+# logger and the measured noise classes (matched on message OR error). Baseline 0/7d.
 resource "google_logging_metric" "kyverno_service_errors" {
   count = local.kyverno_enabled && try(var.kyverno.service_errors_check.enabled, false) ? 1 : 0
 
