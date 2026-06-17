@@ -8,7 +8,7 @@ locals {
 
   # Tier 1 noise classes, matched on jsonPayload.message OR jsonPayload.error.
   # Patterns are plain substrings (no regex metacharacters), joined into one alternation.
-  kyverno_noise_regex = join("|", var.kyverno.service_errors_check.noise_exclusions)
+  kyverno_noise_regex = var.kyverno.service_errors_check.noise_exclusions == null ? "" : join("|", var.kyverno.service_errors_check.noise_exclusions)
 
   # Tier 1 — service errors: ERROR logs, excluding the engine logger and the measured noise classes.
   kyverno_tier1_filter = <<-EOT
