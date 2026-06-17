@@ -511,7 +511,7 @@ locals {
                 targetAxis = "Y1"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    filter = "metric.type=\"logging.googleapis.com/user/${local.kyverno_engine_metric_name}\" resource.type=\"k8s_container\""
+                    filter = "metric.type=\"logging.googleapis.com/user/${local.kyverno_engine_metric_name}\" AND resource.type=\"k8s_container\""
                     aggregation = {
                       alignmentPeriod    = "300s"
                       perSeriesAligner   = "ALIGN_DELTA"
