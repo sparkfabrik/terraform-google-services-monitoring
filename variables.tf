@@ -153,7 +153,7 @@ variable "kyverno" {
   validation {
     condition = (
       !var.kyverno.enabled ||
-      (var.kyverno.cluster_name != null && trimspace(var.kyverno.cluster_name) != "")
+      (var.kyverno.cluster_name == null ? false : trimspace(var.kyverno.cluster_name) != "")
     )
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty or whitespace-only."
   }
