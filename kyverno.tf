@@ -8,7 +8,7 @@ locals {
 
   # Tier 1 noise classes, matched on jsonPayload.message OR jsonPayload.error.
   # Patterns are plain substrings (no regex metacharacters), joined into one alternation.
-  kyverno_noise_regex = var.kyverno.service_errors_check.noise_exclusions == null ? "" : join("|", var.kyverno.service_errors_check.noise_exclusions)
+  kyverno_noise_regex = try(join("|", var.kyverno.service_errors_check.noise_exclusions), "")
 
   # Tier 1 — service errors: ERROR logs, excluding the engine logger and the measured noise classes.
   kyverno_tier1_filter = <<-EOT
@@ -53,7 +53,7 @@ locals {
 # (ALIGN_DELTA / REDUCE_SUM). A dead or hung controller (liveness probe converts
 # "hung" into a restart) raises the restart delta and opens the alert.
 resource "google_monitoring_alert_policy" "kyverno_admission_restart" {
-  count = local.kyverno_enabled && var.kyverno.restart_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.restart_check.enabled, false) ? 1 : 0
 
   project      = local.kyverno_project_id
   display_name = "Kyverno admission controller restarts (cluster=${local.kyverno_cluster_name}, namespace=${var.kyverno.namespace})"
@@ -109,7 +109,7 @@ resource "google_monitoring_alert_policy" "kyverno_admission_restart" {
 # Log-based counter over ERROR logs in the kyverno namespace, excluding the engine
 # logger and the 12 measured noise classes (matched on message OR error). Baseline 0/7d.
 resource "google_logging_metric" "kyverno_service_errors" {
-  count = local.kyverno_enabled && var.kyverno.service_errors_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.service_errors_check.enabled, false) ? 1 : 0
 
   project = local.kyverno_project_id
   name    = "kyverno_service_errors_${local.kyverno_cluster_name}"
@@ -125,7 +125,7 @@ resource "google_logging_metric" "kyverno_service_errors" {
 
 # Tier 1 alert — service errors > threshold in the alignment window.
 resource "google_monitoring_alert_policy" "kyverno_service_errors" {
-  count = local.kyverno_enabled && var.kyverno.service_errors_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.service_errors_check.enabled, false) ? 1 : 0
 
   project      = local.kyverno_project_id
   display_name = "Kyverno service errors — tier 1 (cluster=${local.kyverno_cluster_name}, namespace=${var.kyverno.namespace})"
@@ -172,7 +172,7 @@ resource "google_monitoring_alert_policy" "kyverno_service_errors" {
 # normally-excluded benign one) is counted. Guards against the exclusion list
 # hiding a sustained incident.
 resource "google_logging_metric" "kyverno_error_volume" {
-  count = local.kyverno_enabled && var.kyverno.volume_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.volume_check.enabled, false) ? 1 : 0
 
   project = local.kyverno_project_id
   name    = "kyverno_error_volume_${local.kyverno_cluster_name}"
@@ -188,7 +188,7 @@ resource "google_logging_metric" "kyverno_error_volume" {
 
 # Tier 2 alert — error volume sustained above threshold per alignment window.
 resource "google_monitoring_alert_policy" "kyverno_error_volume" {
-  count = local.kyverno_enabled && var.kyverno.volume_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.volume_check.enabled, false) ? 1 : 0
 
   project      = local.kyverno_project_id
   display_name = "Kyverno error volume — tier 2 catch-all (cluster=${local.kyverno_cluster_name}, namespace=${var.kyverno.namespace})"
@@ -234,7 +234,7 @@ resource "google_monitoring_alert_policy" "kyverno_error_volume" {
 # Log-based counter over engine-logger ERROR logs, labeled by the structured field
 # jsonPayload."policy.name" so each broken policy is a distinct time series.
 resource "google_logging_metric" "kyverno_engine_errors" {
-  count = local.kyverno_enabled && var.kyverno.engine_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.engine_check.enabled, false) ? 1 : 0
 
   project = local.kyverno_project_id
   name    = "kyverno_engine_errors_${local.kyverno_cluster_name}"
@@ -266,7 +266,7 @@ resource "google_logging_metric" "kyverno_engine_errors" {
 # (notification_rate_limit is rejected by the API on metric-threshold alerts — it is
 # allowed only on log-based condition_matched_log policies.)
 resource "google_monitoring_alert_policy" "kyverno_engine_errors" {
-  count = local.kyverno_enabled && var.kyverno.engine_check.enabled ? 1 : 0
+  count = local.kyverno_enabled && try(var.kyverno.engine_check.enabled, false) ? 1 : 0
 
   project      = local.kyverno_project_id
   display_name = "Kyverno broken policies — engine errors (cluster=${local.kyverno_cluster_name}, namespace=${var.kyverno.namespace})"
@@ -318,7 +318,7 @@ resource "google_monitoring_alert_policy" "kyverno_engine_errors" {
 #       engine-error rate chart on the kyverno_engine_errors log-based metric.
 # Requires Log Analytics on the project's _Default bucket (SQL widget prerequisite).
 locals {
-  kyverno_dashboard_enabled = local.kyverno_enabled && var.kyverno.dashboard.enabled
+  kyverno_dashboard_enabled = local.kyverno_enabled && try(var.kyverno.dashboard.enabled, false)
 
   # Log Analytics view backing the SQL widgets (the project's _Default bucket).
   kyverno_log_view = "`${local.kyverno_project_id}.global._Default._AllLogs`"
