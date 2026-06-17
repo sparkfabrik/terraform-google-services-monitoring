@@ -418,17 +418,18 @@ locals {
       columns = 48
       tiles = [
         {
-          xPos = 0, yPos = 0, width = 48, height = 2
+          width = 48, height = 2
           widget = {
             title = "Section A — Violated policies"
             text = {
               content = "Distinct violating resources from `PolicyViolation` events (policy-side, deduped), current state over ${var.kyverno.dashboard.window_hours}h. Raw event counts are meaningless (resources × scans/day) — distinct-resource counting only."
               format  = "MARKDOWN"
+              style   = {}
             }
           }
         },
         {
-          xPos = 0, yPos = 2, width = 12, height = 10
+          yPos = 2, width = 12, height = 10
           widget = {
             title = "Distinct violating resources (current state)"
             timeSeriesTable = {
@@ -458,7 +459,7 @@ locals {
           }
         },
         {
-          xPos = 0, yPos = 12, width = 48, height = 12
+          yPos = 12, width = 48, height = 12
           widget = {
             title = "Distinct violating resources — daily trend (30d)"
             xyChart = {
@@ -472,17 +473,18 @@ locals {
           }
         },
         {
-          xPos = 0, yPos = 24, width = 48, height = 2
+          yPos = 24, width = 48, height = 2
           widget = {
             title = "Section B — Error-producing policies"
             text = {
               content = "Policies emitting engine ERROR logs (`severity=ERROR AND jsonPayload.logger=~\"^engine\"`), split by the structured field `jsonPayload.\"policy.name\"`."
               format  = "MARKDOWN"
+              style   = {}
             }
           }
         },
         {
-          xPos = 0, yPos = 26, width = 12, height = 10
+          yPos = 26, width = 12, height = 10
           widget = {
             title = "Policies currently in error"
             timeSeriesTable = {
