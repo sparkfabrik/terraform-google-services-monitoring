@@ -350,15 +350,7 @@ locals {
         AND REGEXP_CONTAINS(JSON_VALUE(json_payload.logger), r'^engine')
   EOT
 
-  # Section A widgets.
-  kyverno_sql_a_total = <<-EOT
-    SELECT
-      COUNT(DISTINCT ${local.kyverno_violating_resource_expr}) AS distinct_violating_resources
-    FROM ${local.kyverno_log_view}
-    WHERE ${local.kyverno_section_a_where}
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${var.kyverno.dashboard.window_hours} HOUR)
-  EOT
-
+  # Section A widgets — violated policies (resources that do not comply).
   kyverno_sql_a_by_policy = <<-EOT
     SELECT
       JSON_VALUE(json_payload.involvedObject.name) AS policy,
@@ -381,35 +373,46 @@ locals {
     ORDER BY distinct_violating_resources DESC
   EOT
 
-  kyverno_sql_a_trend = <<-EOT
+  # Which policies are violated in each namespace (no counts — magnitude lives in the
+  # per-policy / per-namespace tables above; this is the drill-down map for triage).
+  kyverno_sql_a_ns_policy = <<-EOT
     SELECT
-      TIMESTAMP_TRUNC(timestamp, DAY) AS day,
-      COUNT(DISTINCT ${local.kyverno_violating_resource_expr}) AS distinct_violating_resources
+      COALESCE(REGEXP_EXTRACT(JSON_VALUE(json_payload.message), r'^\S+ ([^/]+)/'), '(cluster-scoped)') AS namespace,
+      JSON_VALUE(json_payload.involvedObject.name) AS policy
     FROM ${local.kyverno_log_view}
     WHERE ${local.kyverno_section_a_where}
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-    GROUP BY day
-    ORDER BY day
-  EOT
-
-  # Section B widgets (engine errors; per-policy split on the structured field).
-  kyverno_sql_b_count = <<-EOT
-    SELECT
-      COUNT(DISTINCT JSON_VALUE(json_payload['policy.name'])) AS policies_in_error
-    FROM ${local.kyverno_log_view}
-    WHERE ${local.kyverno_section_b_where}
       AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${var.kyverno.dashboard.window_hours} HOUR)
+    GROUP BY namespace, policy
+    ORDER BY namespace
   EOT
 
+  # Section B widgets — broken policies (engine evaluation errors), split by the
+  # structured field json_payload."policy.name" and the engine error message.
   kyverno_sql_b_by_policy = <<-EOT
     SELECT
       JSON_VALUE(json_payload['policy.name']) AS policy,
+      JSON_VALUE(json_payload.message) AS error,
       COUNT(*) AS error_count
     FROM ${local.kyverno_log_view}
     WHERE ${local.kyverno_section_b_where}
       AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${var.kyverno.dashboard.window_hours} HOUR)
-    GROUP BY policy
+    GROUP BY policy, error
     ORDER BY error_count DESC
+  EOT
+
+  # Broken policies per namespace with the engine error text. The namespace here is the
+  # evaluated resource's namespace (json_payload."new.namespace"), not the kyverno
+  # namespace where the log originates.
+  kyverno_sql_b_ns_policy = <<-EOT
+    SELECT
+      JSON_VALUE(json_payload['new.namespace']) AS namespace,
+      JSON_VALUE(json_payload['policy.name']) AS policy,
+      JSON_VALUE(json_payload.message) AS error
+    FROM ${local.kyverno_log_view}
+    WHERE ${local.kyverno_section_b_where}
+      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${var.kyverno.dashboard.window_hours} HOUR)
+    GROUP BY namespace, policy, error
+    ORDER BY namespace
   EOT
 
   kyverno_dashboard_json = jsonencode({
@@ -422,26 +425,16 @@ locals {
           widget = {
             title = "Section A — Violated policies"
             text = {
-              content = "Distinct violating resources from `PolicyViolation` events (policy-side, deduped), current state over ${var.kyverno.dashboard.window_hours}h. Raw event counts are meaningless (resources × scans/day) — distinct-resource counting only."
+              content = "**Violated policies** — resources that do not comply with a Kyverno policy, taken from `PolicyViolation` events (policy-side, deduplicated to distinct resources). Counts are the current state over the last ${var.kyverno.dashboard.window_hours}h: Kyverno's background scan re-emits an event for every still-non-compliant resource roughly hourly, so this window captures the steady-state set without inflating it with repeated scans. Raw event counts are meaningless (resources × scans/day); only distinct resources are counted. Use the per-namespace and namespace-to-policy tables to find where to act."
               format  = "MARKDOWN"
               style   = {}
             }
           }
         },
         {
-          yPos = 2, width = 12, height = 10
+          yPos = 2, width = 24, height = 10
           widget = {
-            title = "Distinct violating resources (current state)"
-            timeSeriesTable = {
-              dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_a_total } } }]
-              metricVisualization = "NUMBER"
-            }
-          }
-        },
-        {
-          xPos = 12, yPos = 2, width = 18, height = 10
-          widget = {
-            title = "Distinct violating resources per policy"
+            title = "Violating resources per policy"
             timeSeriesTable = {
               dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_a_by_policy } } }]
               metricVisualization = "NUMBER"
@@ -449,9 +442,9 @@ locals {
           }
         },
         {
-          xPos = 30, yPos = 2, width = 18, height = 10
+          xPos = 24, yPos = 2, width = 24, height = 10
           widget = {
-            title = "Distinct violating resources per namespace"
+            title = "Violating resources per namespace"
             timeSeriesTable = {
               dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_a_by_namespace } } }]
               metricVisualization = "NUMBER"
@@ -461,42 +454,28 @@ locals {
         {
           yPos = 12, width = 48, height = 12
           widget = {
-            title = "Distinct violating resources — daily trend (30d)"
-            xyChart = {
-              dataSets = [{
-                plotType        = "LINE"
-                targetAxis      = "Y1"
-                timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_a_trend } }
-              }]
-              yAxis = { label = "distinct resources", scale = "LINEAR" }
+            title = "Violated policies per namespace"
+            timeSeriesTable = {
+              dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_a_ns_policy } } }]
+              metricVisualization = "NUMBER"
             }
           }
         },
         {
           yPos = 24, width = 48, height = 2
           widget = {
-            title = "Section B — Error-producing policies"
+            title = "Section B — Broken policies"
             text = {
-              content = "Policies emitting engine ERROR logs (`severity=ERROR AND jsonPayload.logger=~\"^engine\"`), split by the structured field `jsonPayload.\"policy.name\"`."
+              content = "**Broken policies** — policies that fail to evaluate, taken from engine ERROR logs (`severity=ERROR` and a logger starting with `engine`). These are not violations: the policy itself errors while Kyverno applies it (for example a malformed pattern or a value/key type mismatch), so its verdict is unreliable until fixed. The tables show the policy, the engine error message, and the namespace of the resource being evaluated; the chart shows the per-policy error rate over time. Fixing a broken policy takes priority over individual violations."
               format  = "MARKDOWN"
               style   = {}
             }
           }
         },
         {
-          yPos = 26, width = 12, height = 10
+          yPos = 26, width = 24, height = 10
           widget = {
-            title = "Policies currently in error"
-            timeSeriesTable = {
-              dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_b_count } } }]
-              metricVisualization = "NUMBER"
-            }
-          }
-        },
-        {
-          xPos = 12, yPos = 26, width = 18, height = 10
-          widget = {
-            title = "Engine error count per policy"
+            title = "Engine errors per policy (with message)"
             timeSeriesTable = {
               dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_b_by_policy } } }]
               metricVisualization = "NUMBER"
@@ -504,7 +483,17 @@ locals {
           }
         },
         {
-          xPos = 30, yPos = 26, width = 18, height = 10
+          xPos = 24, yPos = 26, width = 24, height = 10
+          widget = {
+            title = "Broken policies per namespace (with error)"
+            timeSeriesTable = {
+              dataSets            = [{ timeSeriesQuery = { opsAnalyticsQuery = { sql = local.kyverno_sql_b_ns_policy } } }]
+              metricVisualization = "NUMBER"
+            }
+          }
+        },
+        {
+          yPos = 36, width = 48, height = 12
           widget = {
             title = "Engine-error rate per policy"
             xyChart = {
