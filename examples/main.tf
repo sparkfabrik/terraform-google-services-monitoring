@@ -3,11 +3,11 @@
  */
 
 locals {
-  # Enable all Cdoud SQL monitorings on selected instances, eg.
+  # Enable all Cloud SQL monitorings on selected instances, eg.
   cloud_sql = {
     instances = {
-      (google_sql_database_instance.master.name) = {}
-      (google_sql_database_instance.stage.name)  = {}
+      "master-instance" = {}
+      "stage-instance"  = {}
     }
   }
 
@@ -42,26 +42,23 @@ locals {
 }
 
 module "example" {
-  source = "github.com/sparkfabrik/terraform-google-services-monitoring?ref=0.9.0"
+  source = "../"
 
   notification_channels = var.notification_channels
   project_id            = var.project_id
   cloud_sql             = local.cloud_sql
+  konnectivity_agent = {
+    cluster_name = "test-cluster"
+  }
   kyverno = {
     cluster_name          = "test-cluster"
     notification_channels = []
-    # Exclude specific message patterns from the default set (matches against jsonPayload.message)
-    error_patterns_exclude = [
-      "failed to start watcher",
-      "failed to list resources",
-    ]
-    # Add custom regex message patterns to the default set (matched against jsonPayload.message)
-    # Note: These options only support message pattern matching. Arbitrary log filter conditions
-    # (e.g., negative filters like -textPayload:"...") are not supported.
-    # error_patterns_include = [
-    #   "my custom.*error",
-    #   "failed to connect.*database",
-    # ]
+    # Level-1 restart alert, two-tier service-error alerts and the broken-policy
+    # engine alert are all enabled by default. Thresholds can be overridden per check,
+    # and the tier-1 noise exclusions extended:
+    # service_errors_check = { threshold = 5, noise_exclusions = ["connection refused"] }
+    # volume_check         = { threshold = 10 }
+    # engine_check         = { threshold = 0 }
   }
   cert_manager = {
     cluster_name = "test-cluster"

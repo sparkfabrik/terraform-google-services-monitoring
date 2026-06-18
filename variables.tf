@@ -69,7 +69,7 @@ variable "cloud_sql" {
 }
 
 variable "kyverno" {
-  description = "Configuration for Kyverno monitoring alerts. Allows customization of cluster name, project, notification channels, alert documentation, metric thresholds, auto-close timing, enablement, message pattern inclusions/exclusions for jsonPayload.message matching, and namespace."
+  description = "Configuration for Kyverno monitoring. Provisions a level-1 admission-controller restart alert, two tiers of service-error alerts (tier 1 filtered against measured noise, tier 2 volume catch-all) and a broken-policy engine alert. All alerts inherit the module notification channels unless overridden. Thresholds stay configurable per cluster."
   default     = {}
   type = object({
     enabled               = optional(bool, true)
@@ -77,82 +77,85 @@ variable "kyverno" {
     project_id            = optional(string, null)
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
-    # Rate limit for notifications, e.g. "300s" for 5 minutes, used only for log match alerts
-    logmatch_notification_rate_limit = optional(string, "300s")
-    alert_documentation              = optional(string, null)
-    auto_close_seconds               = optional(number, 3600)
-    namespace                        = optional(string, "kyverno")
-    # List of message patterns to exclude from the default set (matches against jsonPayload.message).
-    # Default patterns available for exclusion:
-    #   "failed to list resources", "failed to watch resource", "failed to start watcher",
-    #   "failed to sync", "failed to run warmup", "failed to load certificate",
-    #   "failed to update lock", "failed to process request", "failed to check permissions",
-    #   "failed to scan resource", "failed to fetch data", "failed to substitute variables",
-    #   "failed calling webhook", "leader election lost", "dropping request", "panic"
-    error_patterns_exclude = optional(list(string), [])
-    # List of additional regex message patterns to include (added to default set)
-    # e.g. ["failed to authenticate.", "failed to connect."]
-    error_patterns_include = optional(list(string), [])
+    alert_documentation   = optional(string, null)
+    namespace             = optional(string, "kyverno")
+
+    # Level 1 — admission controller pod restarts (system metric restart_count).
+    restart_check = optional(object({
+      enabled              = optional(bool, true)
+      threshold            = optional(number, 0)
+      alignment_period     = optional(number, 60)
+      duration             = optional(number, 60)
+      auto_close_seconds   = optional(number, 3600)
+      notification_prompts = optional(list(string), null)
+    }), {})
+
+    # Tier 1 — service errors: ERROR logs minus the measured noise classes, minus the engine logger.
+    # threshold > value within alignment_period (default > 5 in 10 min).
+    service_errors_check = optional(object({
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 5)
+      alignment_period   = optional(number, 600)
+      duration           = optional(number, 0)
+      auto_close_seconds = optional(number, 3600)
+      # Noise classes excluded from tier 1, matched on jsonPayload.message OR jsonPayload.error.
+      noise_exclusions = optional(list(string), [
+        "failed to update lock optimistically",
+        "context canceled",
+        "context deadline exceeded",
+        "stale GroupVersion discovery",
+        "the server is currently unable to handle the request",
+        "leader election lost",
+        "http: Server closed",
+        "Operation cannot be fulfilled on",
+        "error reading from server",
+        "connection reset by peer",
+        "connection force closed",
+        "connection refused",
+        "http2: client connection lost",
+        "use of closed network connection",
+        "failed to delete ephemeral report",
+      ])
+    }), {})
+
+    # Tier 2 — volume catch-all: same source as tier 1, no exclusions, minus the engine logger.
+    # threshold > value per alignment_period sustained for duration (default > 10/min for 15 min).
+    volume_check = optional(object({
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 10)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 900)
+      auto_close_seconds = optional(number, 3600)
+    }), {})
+
+    # Engine — broken policies: engine-logger ERROR logs, one incident per policy.
+    # threshold > value sustained for duration (default > 0 for 5 min).
+    engine_check = optional(object({
+      enabled            = optional(bool, true)
+      threshold          = optional(number, 0)
+      alignment_period   = optional(number, 60)
+      duration           = optional(number, 300)
+      auto_close_seconds = optional(number, 3600)
+    }), {})
+
+    # Policy review dashboard (google_monitoring_dashboard). Section A — violated
+    # policies from PolicyViolation events (Log Analytics SQL widgets); Section B —
+    # error-producing policies from engine ERROR logs. Requires Log Analytics enabled
+    # on the project's _Default bucket (prerequisite for the SQL widgets).
+    dashboard = optional(object({
+      enabled = optional(bool, true)
+      # Rolling window (hours) for the "current state" widgets; the background scan
+      # re-emits persistent violations roughly hourly, so 25h covers the current state.
+      window_hours = optional(number, 25)
+    }), {})
   })
 
   validation {
     condition = (
       !var.kyverno.enabled ||
-      (var.kyverno.cluster_name != null && var.kyverno.cluster_name != "")
+      (var.kyverno.cluster_name == null ? false : trimspace(var.kyverno.cluster_name) != "")
     )
-    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
-  }
-
-  validation {
-    condition = alltrue([
-      for pattern in var.kyverno.error_patterns_exclude : contains([
-        "failed to list resources",
-        "failed to watch resource",
-        "failed to start watcher",
-        "failed to sync",
-        "failed to run warmup",
-        "failed to load certificate",
-        "failed to update lock",
-        "failed to process request",
-        "failed to check permissions",
-        "failed to scan resource",
-        "failed to fetch data",
-        "failed to substitute variables",
-        "failed calling webhook",
-        "leader election lost",
-        "dropping request",
-        "panic",
-      ], pattern)
-    ])
-    error_message = "error_patterns_exclude contains invalid pattern(s). Only default patterns can be excluded. Check the variable description for the list of valid patterns."
-  }
-
-  validation {
-    condition = (
-      !var.kyverno.enabled ||
-      length(setsubtract(
-        toset(concat([
-          "failed to list resources",
-          "failed to watch resource",
-          "failed to start watcher",
-          "failed to sync",
-          "failed to run warmup",
-          "failed to load certificate",
-          "failed to update lock",
-          "failed to process request",
-          "failed to check permissions",
-          "failed to scan resource",
-          "failed to fetch data",
-          "failed to substitute variables",
-          "failed calling webhook",
-          "leader election lost",
-          "dropping request",
-          "panic",
-        ], var.kyverno.error_patterns_include)),
-        toset(var.kyverno.error_patterns_exclude)
-      )) > 0
-    )
-    error_message = "The combination of error_patterns_exclude and error_patterns_include results in no active message patterns. At least one pattern must remain active, otherwise the alert will not be created."
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty or whitespace-only."
   }
 }
 
