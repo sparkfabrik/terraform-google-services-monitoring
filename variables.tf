@@ -64,6 +64,18 @@ variable "cloud_sql" {
           threshold = 0.95,
         }
       ])
+      availability = optional(list(object({
+        severity         = optional(string, "CRITICAL"),
+        threshold        = optional(number, 1)
+        alignment_period = optional(string, "60s")
+        duration         = optional(string, "300s")
+      })), [])
+      connections = optional(list(object({
+        severity         = optional(string, "WARNING"),
+        threshold        = optional(number)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+      })), [])
     })), {})
   })
 }
@@ -360,6 +372,20 @@ variable "memorystore" {
           threshold = 0.80,
         }
       ])
+      connected_clients = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number)
+        alignment_period = optional(string, "300s")
+        duration         = optional(string, "300s")
+        })), []
+      )
+      uptime = optional(list(object({
+        severity         = optional(string, "WARNING")
+        threshold        = optional(number, 300)
+        alignment_period = optional(string, "60s")
+        duration         = optional(string, "0s")
+        })), []
+      )
     })), {})
 
     clusters = optional(map(object({

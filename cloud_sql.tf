@@ -55,6 +55,38 @@ locals {
       ]
     ) : "${item.instance}--${item.severity}--${item.threshold}" => item
   }
+
+  cloud_sql_availability = {
+    for item in flatten(
+      [
+        for instance, instance_config in var.cloud_sql.instances : [
+          for availability in instance_config.availability :
+          merge(
+            {
+              "instance" : instance,
+            },
+            availability
+          )
+        ]
+      ]
+    ) : "${item.instance}--${item.severity}--${item.threshold}" => item
+  }
+
+  cloud_sql_connections = {
+    for item in flatten(
+      [
+        for instance, instance_config in var.cloud_sql.instances : [
+          for connections in instance_config.connections :
+          merge(
+            {
+              "instance" : instance,
+            },
+            connections
+          )
+        ]
+      ]
+    ) : "${item.instance}--${item.severity}--${item.threshold}" => item
+  }
 }
 
 # ----------------------
@@ -150,6 +182,80 @@ resource "google_monitoring_alert_policy" "cloud_sql_disk_utilization" {
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
 
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+
+  alert_strategy {
+    auto_close = var.cloud_sql.auto_close
+  }
+  notification_channels = local.cloud_sql_notification_channels
+}
+
+# ----------------------
+# CloudSQL availability (database/up)
+# ----------------------
+resource "google_monitoring_alert_policy" "cloud_sql_availability" {
+  for_each = local.cloud_sql_availability
+
+  display_name = "${local.cloud_sql_project} ${each.value.instance} - Availability ${each.value.severity}"
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    display_name = "${local.cloud_sql_project} ${each.value.instance} - Availability ${each.value.severity}"
+    condition_threshold {
+      filter          = <<-EOT
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="${local.cloud_sql_project}:${each.value.instance}"
+        AND metric.type="cloudsql.googleapis.com/database/up"
+      EOT
+      comparison      = "COMPARISON_LT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+      trigger {
+        count = 1
+      }
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+    }
+  }
+
+  alert_strategy {
+    auto_close = var.cloud_sql.auto_close
+  }
+  notification_channels = local.cloud_sql_notification_channels
+}
+
+# ----------------------
+# CloudSQL connections
+# ----------------------
+resource "google_monitoring_alert_policy" "cloud_sql_connections" {
+  for_each = local.cloud_sql_connections
+
+  display_name = "${local.cloud_sql_project} ${each.value.instance} - Connections ${each.value.severity} > ${each.value.threshold}"
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    display_name = "${local.cloud_sql_project} ${each.value.instance} - Connections ${each.value.severity} > ${each.value.threshold}"
+    condition_threshold {
+      filter          = <<-EOT
+        resource.type="cloudsql_database"
+        AND resource.labels.database_id="${local.cloud_sql_project}:${each.value.instance}"
+        AND metric.type="cloudsql.googleapis.com/database/network/connections"
+      EOT
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+      trigger {
+        count = 1
+      }
       aggregations {
         alignment_period   = each.value.alignment_period
         per_series_aligner = "ALIGN_MEAN"
