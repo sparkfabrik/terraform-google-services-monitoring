@@ -12,8 +12,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - CloudSQL availability alert on `cloudsql.googleapis.com/database/up` via the `cloud_sql` `instances[].availability` field (opt-in, empty by default).
 - CloudSQL connections alert on `cloudsql.googleapis.com/database/network/connections` via the `cloud_sql` `instances[].connections` field (opt-in, empty by default).
-- Memorystore Redis connected-clients alert on `redis.googleapis.com/stats/connected_clients` via the `memorystore` `instances[].connected_clients` field (opt-in, empty by default).
-- Memorystore Redis uptime alert on `redis.googleapis.com/stats/uptime` (restart detection, `COMPARISON_LT`) via the `memorystore` `instances[].uptime` field (opt-in, empty by default).
+- Memorystore Redis connected-clients alert on `redis.googleapis.com/clients/connected` via the `memorystore` `instances[].connected_clients` field (opt-in, empty by default).
+- Memorystore Redis uptime alert on `redis.googleapis.com/server/uptime` (restart detection, `COMPARISON_LT`) via the `memorystore` `instances[].uptime` field (opt-in, empty by default).
 
 ## [0.17.0] - 2026-06-17
 

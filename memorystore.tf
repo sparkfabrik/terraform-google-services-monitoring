@@ -297,7 +297,7 @@ resource "google_monitoring_alert_policy" "memorystore_instance_connected_client
       filter = <<-EOT
         resource.type = "redis_instance"
         AND resource.labels.instance_id = "${each.value.instance}"
-        AND metric.type = "redis.googleapis.com/stats/connected_clients"
+        AND metric.type = "redis.googleapis.com/clients/connected"
       EOT
 
       comparison      = "COMPARISON_GT"
@@ -339,7 +339,7 @@ resource "google_monitoring_alert_policy" "memorystore_instance_uptime" {
       filter = <<-EOT
         resource.type = "redis_instance"
         AND resource.labels.instance_id = "${each.value.instance}"
-        AND metric.type = "redis.googleapis.com/stats/uptime"
+        AND metric.type = "redis.googleapis.com/server/uptime"
       EOT
 
       comparison      = "COMPARISON_LT"
