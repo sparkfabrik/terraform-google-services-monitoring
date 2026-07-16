@@ -112,6 +112,20 @@ Workload vitals SHALL target the GKE cluster resolved as the app-level `cluster_
 - **WHEN** an app has `workload_check` configured, no app-level `cluster_name`, and no service-level `cluster_name`
 - **THEN** Terraform validation fails naming the missing input
 
+### Requirement: Threshold severity validation
+
+The `typesense` variable validation SHALL reject any `workload_check` threshold entry (in `memory_utilization`, `cpu_utilization` or `volume_utilization`) whose `severity` is not one of `WARNING`, `ERROR`, `CRITICAL` (the values accepted by `google_monitoring_alert_policy.severity`), so misconfiguration fails at plan time instead of apply time.
+
+#### Scenario: Invalid severity
+
+- **WHEN** an app sets `workload_check.memory_utilization = [{ severity = "critical", threshold = 0.95 }]`
+- **THEN** Terraform validation fails naming the accepted severity values
+
+#### Scenario: Valid severities
+
+- **WHEN** threshold entries use any of `WARNING`, `ERROR`, `CRITICAL`
+- **THEN** validation passes and one policy is created per entry with that severity
+
 ### Requirement: Notification channel cascade and alert strategy
 
 Workload vitals policies SHALL reuse the existing Typesense notification cascade (app check disabled → none; override list → service list → root list) and SHALL apply `workload_check.auto_close_seconds` (default 3600) and optional `workload_check.notification_prompts` to every policy of the block.
