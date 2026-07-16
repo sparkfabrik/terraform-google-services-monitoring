@@ -31,8 +31,8 @@
 ## 5. Verification
 
 - [x] 5.1 `make lint` and `make tfsec` pass.
-- [ ] 5.2 No-diff check: plan a downstream stack pinned to the branch with unchanged 0.17-style config and confirm zero changes. (Local equivalent done: `terraform plan` JSON planned-values of an unchanged 0.17-style config are byte-identical between `main` and this branch. Real downstream confirmation still pending.)
-- [ ] 5.3 Adoption check: enable `workload_check` on one app in a sandbox and confirm the expected policy set (2 memory + 1 CPU + 2 volume + 2 replica for a 3-replica app). (Local plan confirms exactly that policy set for a 3-replica app, plus WARNING-skip for a 1-replica app. Sandbox apply still pending.)
+- [x] 5.2 No-diff check: plan a downstream stack pinned to the branch with unchanged 0.17-style config and confirm zero changes. (Confirmed on a real downstream project pinned to `e6274fa`: zero changes. Also verified locally: plan JSON planned-values byte-identical between `main` and this branch for the same config.)
+- [x] 5.3 Adoption check: enable `workload_check` on one app in a sandbox and confirm the expected policy set (2 memory + 1 CPU + 2 volume + 2 replica for a 3-replica app). (Confirmed with a plan-only test on a real downstream project: enabling `workload_check` (3 replicas) plus `content_match` on one app plans exactly 7 new policies, 2 memory + 1 CPU + 2 volume + 2 replica, and one in-place uptime-check update adding the content matcher. Filters and PromQL carry the real cluster values. Nothing applied.)
 
 ## 6. Change management
 
