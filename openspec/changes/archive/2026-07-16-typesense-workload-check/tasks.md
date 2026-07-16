@@ -37,4 +37,4 @@
 ## 6. Change management
 
 - [x] 6.1 Commit spec artifacts and implementation per the repo's OpenSpec workflow (spec-first PR, then implementation, or one PR if maintainers deem it trivial).
-- [ ] 6.2 After merge: sync delta specs into `openspec/specs/` and archive the change to `openspec/changes/archive/YYYY-MM-DD-typesense-workload-check/`.
+- [x] 6.2 After merge: sync delta specs into `openspec/specs/` and archive the change to `openspec/changes/archive/YYYY-MM-DD-typesense-workload-check/`.
