@@ -351,6 +351,21 @@ variable "typesense" {
   validation {
     condition = alltrue([
       for app_name, config in var.typesense.apps : (
+        config.workload_check == null ? true : alltrue([
+          for entry in concat(
+            config.workload_check.memory_utilization,
+            config.workload_check.cpu_utilization,
+            config.workload_check.volume_utilization
+          ) : contains(["WARNING", "ERROR", "CRITICAL"], upper(entry.severity))
+        ])
+      )
+    ])
+    error_message = "Each workload_check threshold entry must use a 'severity' of 'WARNING', 'ERROR' or 'CRITICAL' (any casing; normalized to uppercase by the module)."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
         (config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null) ||
         try(trimspace(coalesce(config.cluster_name, var.typesense.cluster_name)), "") != ""
       )

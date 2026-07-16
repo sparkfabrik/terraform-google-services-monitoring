@@ -115,9 +115,10 @@ module "example" {
           container_name    = "typesense"
           controller_name   = "typesense-2-sts"
           volume_name       = "storage"
+          # Severity is case-insensitive; the module normalizes it to uppercase.
           memory_utilization = [
             {
-              severity         = "CRITICAL"
+              severity         = "critical"
               threshold        = 0.90
               alignment_period = "300s"
               duration         = "300s"

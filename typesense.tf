@@ -35,9 +35,26 @@ locals {
     if config.flood_check != null && try(config.flood_check.enabled, false)
   } : {}
 
+  # Threshold severities are accepted in any casing and normalized to
+  # uppercase here, before the flattened maps below, so for_each keys,
+  # display names and the policy severity attribute all share one
+  # canonical value.
   typesense_workload_checks = var.typesense.enabled ? {
     for app_name, config in var.typesense.apps :
-    app_name => config.workload_check
+    app_name => merge(config.workload_check, {
+      memory_utilization = [
+        for entry in config.workload_check.memory_utilization :
+        merge(entry, { severity = upper(entry.severity) })
+      ]
+      cpu_utilization = [
+        for entry in config.workload_check.cpu_utilization :
+        merge(entry, { severity = upper(entry.severity) })
+      ]
+      volume_utilization = [
+        for entry in config.workload_check.volume_utilization :
+        merge(entry, { severity = upper(entry.severity) })
+      ]
+    })
     if config.workload_check != null && try(config.workload_check.enabled, false)
   } : {}
 
