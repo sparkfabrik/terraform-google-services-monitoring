@@ -9,6 +9,8 @@ Terraform module for creating HTTPS uptime checks and alert policies in Google C
 - Multi-region monitoring (default: USA, Europe, Asia Pacific)
 - Automatic alert policy on check failure
 - Custom response status code validation
+- Optional response content assertions (content matchers)
+- Optional documentation block on the failure alert policy
 
 ## Usage
 
@@ -42,6 +44,8 @@ module "http_monitoring" {
 | `alert_display_name`               | Display name for the alert                            | `string`       | `""`                                         |    no    |
 | `accepted_response_status_values`  | Accepted HTTP status codes                            | `set(number)`  | `[]`                                         |    no    |
 | `accepted_response_status_classes` | Accepted HTTP status classes (e.g., STATUS_CLASS_2XX) | `set(string)`  | `[]`                                         |    no    |
+| `content_matchers`                 | Response content assertions (`{ content, matcher }`, matcher defaults to `CONTAINS_STRING`) | `list(object)` | `[]`                                         |    no    |
+| `alert_documentation`              | Markdown documentation rendered into the failure alert policy | `string`       | `null`                                       |    no    |
 
 ## Resources Created
 

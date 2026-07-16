@@ -37,3 +37,19 @@ output "typesense_logmatch_alert_policy_names" {
 output "typesense_flood_alert_policy_names" {
   value = { for k, v in google_monitoring_alert_policy.typesense_flood_alert : k => v.name }
 }
+
+output "typesense_workload_memory_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_workload_memory : k => v.name }
+}
+
+output "typesense_workload_cpu_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_workload_cpu : k => v.name }
+}
+
+output "typesense_workload_volume_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_workload_volume : k => v.name }
+}
+
+output "typesense_workload_replicas_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.typesense_workload_replicas : k => v.name }
+}

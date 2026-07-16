@@ -66,11 +66,13 @@ module "example" {
   }
 
   typesense = {
-    cluster_name = "test-cluster"
+    cluster_name        = "test-cluster"
+    alert_documentation = "Typesense runbook: https://runbooks.example.com/typesense"
     apps = {
       "typesense-app" = {
         uptime_check = {
-          host = "typesense.example.com"
+          host          = "typesense.example.com"
+          content_match = "\"cluster_status\":\"OK\""
         }
         container_check = {
           enabled   = true
@@ -94,6 +96,46 @@ module "example" {
           duration_seconds             = 300
           auto_close_seconds           = 86400
           notification_rate_limit      = "3600s"
+        }
+        # Workload vitals with curated defaults: memory WARNING 85% / CRITICAL 95%,
+        # CPU WARNING 90%, volume WARNING 75% / CRITICAL 85%, replica availability
+        # CRITICAL below raft quorum and WARNING below expected_replicas.
+        workload_check = {
+          namespace         = "typesense"
+          expected_replicas = 3
+        }
+      }
+      # Second app on another GKE cluster (per-app override of the service-level
+      # cluster_name), with every workload_check field customized.
+      "typesense-app-2" = {
+        cluster_name = "other-cluster"
+        workload_check = {
+          namespace         = "typesense-2"
+          expected_replicas = 1
+          container_name    = "typesense"
+          controller_name   = "typesense-2-sts"
+          volume_name       = "storage"
+          # Severity is case-insensitive; the module normalizes it to uppercase.
+          memory_utilization = [
+            {
+              severity         = "critical"
+              threshold        = 0.90
+              alignment_period = "300s"
+              duration         = "300s"
+            }
+          ]
+          cpu_utilization = [] # family disabled
+          volume_utilization = [
+            {
+              threshold = 0.80
+            }
+          ]
+          replica_availability = {
+            enabled          = true
+            duration_seconds = 120
+          }
+          auto_close_seconds   = 7200
+          notification_prompts = ["CLOSED"]
         }
       }
     }

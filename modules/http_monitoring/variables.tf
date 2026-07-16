@@ -79,6 +79,21 @@ variable "accepted_response_status_values" {
   default     = []
 }
 
+variable "content_matchers" {
+  description = "Response content assertions for the uptime check. Each entry renders one content_matchers block; the check fails whenever the assertion does not hold, even if the HTTP response status is accepted."
+  type = list(object({
+    content = string
+    matcher = optional(string, "CONTAINS_STRING")
+  }))
+  default = []
+}
+
+variable "alert_documentation" {
+  description = "Optional documentation (markdown) rendered into the uptime failure alert policy. When null, no documentation block is rendered."
+  type        = string
+  default     = null
+}
+
 variable "accepted_response_status_classes" {
   description = "Check will only pass if the HTTP response status code is in this set of status classes (combined with the set of status values). Possible values: STATUS_CLASS_1XX, STATUS_CLASS_2XX, STATUS_CLASS_3XX, STATUS_CLASS_4XX, STATUS_CLASS_5XX, STATUS_CLASS_ANY"
   type        = set(string)
