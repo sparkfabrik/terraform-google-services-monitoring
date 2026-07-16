@@ -112,19 +112,24 @@ Workload vitals SHALL target the GKE cluster resolved as the app-level `cluster_
 - **WHEN** an app has `workload_check` configured, no app-level `cluster_name`, and no service-level `cluster_name`
 - **THEN** Terraform validation fails naming the missing input
 
-### Requirement: Threshold severity validation
+### Requirement: Threshold severity validation and normalization
 
-The `typesense` variable validation SHALL reject any `workload_check` threshold entry (in `memory_utilization`, `cpu_utilization` or `volume_utilization`) whose `severity` is not one of `WARNING`, `ERROR`, `CRITICAL` (the values accepted by `google_monitoring_alert_policy.severity`), so misconfiguration fails at plan time instead of apply time.
+The `typesense` variable SHALL accept `workload_check` threshold `severity` values (in `memory_utilization`, `cpu_utilization` and `volume_utilization`) case-insensitively and normalize them to uppercase wherever they are used (the policy `severity` attribute, display names and `for_each` keys). Validation SHALL fail at plan time only when a value does not match one of `WARNING`, `ERROR`, `CRITICAL` (the values accepted by `google_monitoring_alert_policy.severity`) after case folding.
+
+#### Scenario: Lowercase severity accepted
+
+- **WHEN** an app sets `workload_check.memory_utilization = [{ severity = "critical", threshold = 0.95 }]`
+- **THEN** validation passes and the resulting policy uses `severity = "CRITICAL"`
 
 #### Scenario: Invalid severity
 
-- **WHEN** an app sets `workload_check.memory_utilization = [{ severity = "critical", threshold = 0.95 }]`
-- **THEN** Terraform validation fails naming the accepted severity values
+- **WHEN** an app sets a threshold entry with `severity = "FATAL"`
+- **THEN** Terraform validation fails at plan time naming the accepted severity values
 
 #### Scenario: Valid severities
 
-- **WHEN** threshold entries use any of `WARNING`, `ERROR`, `CRITICAL`
-- **THEN** validation passes and one policy is created per entry with that severity
+- **WHEN** threshold entries use any casing of `WARNING`, `ERROR`, `CRITICAL`
+- **THEN** validation passes and one policy is created per entry with the uppercase severity
 
 ### Requirement: Notification channel cascade and alert strategy
 
