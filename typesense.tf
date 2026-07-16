@@ -3,6 +3,14 @@ locals {
 
   typesense_notification_channels = var.typesense.notification_enabled ? (length(var.typesense.notification_channels) > 0 ? var.typesense.notification_channels : var.notification_channels) : []
 
+  # Per-app GKE cluster resolution: app-level override wins, service-level
+  # value is the fallback. Apps without any Kubernetes-based check may
+  # resolve to null (validated in variables.tf otherwise).
+  typesense_cluster_names = {
+    for app_name, config in var.typesense.apps :
+    app_name => try(coalesce(config.cluster_name, var.typesense.cluster_name), null)
+  }
+
   typesense_uptime_checks = var.typesense.enabled ? {
     for app_name, config in var.typesense.apps :
     app_name => config.uptime_check
@@ -26,6 +34,119 @@ locals {
     app_name => config.flood_check
     if config.flood_check != null && try(config.flood_check.enabled, false)
   } : {}
+
+  typesense_workload_checks = var.typesense.enabled ? {
+    for app_name, config in var.typesense.apps :
+    app_name => config.workload_check
+    if config.workload_check != null && try(config.workload_check.enabled, false)
+  } : {}
+
+  # Flattened threshold-family maps, one alert policy per entry,
+  # keyed <app>--<severity>--<threshold> (cloud_sql pattern).
+  typesense_workload_memory_utilization = {
+    for item in flatten([
+      for app_name, wc in local.typesense_workload_checks : [
+        for memory_utilization in wc.memory_utilization :
+        merge(
+          {
+            app                  = app_name
+            cluster_name         = local.typesense_cluster_names[app_name]
+            namespace            = wc.namespace
+            container_name       = wc.container_name
+            controller_name      = wc.controller_name
+            auto_close_seconds   = wc.auto_close_seconds
+            notification_prompts = wc.notification_prompts
+          },
+          memory_utilization
+        )
+      ]
+    ]) : "${item.app}--${item.severity}--${item.threshold}" => item
+  }
+
+  typesense_workload_cpu_utilization = {
+    for item in flatten([
+      for app_name, wc in local.typesense_workload_checks : [
+        for cpu_utilization in wc.cpu_utilization :
+        merge(
+          {
+            app                  = app_name
+            cluster_name         = local.typesense_cluster_names[app_name]
+            namespace            = wc.namespace
+            container_name       = wc.container_name
+            controller_name      = wc.controller_name
+            auto_close_seconds   = wc.auto_close_seconds
+            notification_prompts = wc.notification_prompts
+          },
+          cpu_utilization
+        )
+      ]
+    ]) : "${item.app}--${item.severity}--${item.threshold}" => item
+  }
+
+  typesense_workload_volume_utilization = {
+    for item in flatten([
+      for app_name, wc in local.typesense_workload_checks : [
+        for volume_utilization in wc.volume_utilization :
+        merge(
+          {
+            app                  = app_name
+            cluster_name         = local.typesense_cluster_names[app_name]
+            namespace            = wc.namespace
+            controller_name      = wc.controller_name
+            volume_name          = wc.volume_name
+            auto_close_seconds   = wc.auto_close_seconds
+            notification_prompts = wc.notification_prompts
+          },
+          volume_utilization
+        )
+      ]
+    ]) : "${item.app}--${item.severity}--${item.threshold}" => item
+  }
+
+  # Raft quorum per app: floor(n/2) + 1.
+  typesense_workload_replica_quorums = {
+    for app_name, wc in local.typesense_workload_checks :
+    app_name => floor(wc.expected_replicas / 2) + 1
+  }
+
+  # Replica availability policies: CRITICAL below quorum, WARNING below the
+  # expected count. The WARNING policy is skipped when it would duplicate the
+  # CRITICAL one (expected_replicas == quorum, e.g. a single replica).
+  typesense_workload_replicas = merge([
+    for app_name, wc in local.typesense_workload_checks :
+    merge(
+      {
+        "${app_name}--CRITICAL" = {
+          app                  = app_name
+          severity             = "CRITICAL"
+          min_count            = local.typesense_workload_replica_quorums[app_name]
+          reason               = "raft quorum"
+          cluster_name         = local.typesense_cluster_names[app_name]
+          namespace            = wc.namespace
+          container_name       = wc.container_name
+          controller_name      = wc.controller_name
+          duration_seconds     = wc.replica_availability.duration_seconds
+          auto_close_seconds   = wc.auto_close_seconds
+          notification_prompts = wc.notification_prompts
+        }
+      },
+      wc.expected_replicas > local.typesense_workload_replica_quorums[app_name] ? {
+        "${app_name}--WARNING" = {
+          app                  = app_name
+          severity             = "WARNING"
+          min_count            = wc.expected_replicas
+          reason               = "expected replicas"
+          cluster_name         = local.typesense_cluster_names[app_name]
+          namespace            = wc.namespace
+          container_name       = wc.container_name
+          controller_name      = wc.controller_name
+          duration_seconds     = wc.replica_availability.duration_seconds
+          auto_close_seconds   = wc.auto_close_seconds
+          notification_prompts = wc.notification_prompts
+        }
+      } : {}
+    ) if wc.replica_availability.enabled
+  ]...)
 }
 
 module "typesense_uptime_checks" {
@@ -38,6 +159,13 @@ module "typesense_uptime_checks" {
   alert_notification_channels = local.typesense_notification_channels
   alert_threshold_value       = 1
   uptime_check_period         = "900s"
+  alert_documentation         = var.typesense.alert_documentation
+  content_matchers = each.value.content_match != null ? [
+    {
+      content = each.value.content_match
+      matcher = "CONTAINS_STRING"
+    }
+  ] : []
 }
 
 # Alert: GKE Pod Restarts
@@ -48,7 +176,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
   for_each = local.typesense_container_checks
 
   project      = local.typesense_project
-  display_name = "Typesense Pod Restarts (cluster=${var.typesense.cluster_name}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense Pod Restarts (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -59,7 +187,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
       filter = <<-EOT
         resource.type="k8s_container"
         AND resource.labels.project_id="${local.typesense_project}"
-        AND resource.labels.cluster_name="${var.typesense.cluster_name}"
+        AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
         AND resource.labels.namespace_name="${each.value.namespace}"
         AND metric.type="kubernetes.io/container/restart_count"
       EOT
@@ -83,6 +211,15 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
     }
   }
 
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
+  }
+
   notification_channels = local.typesense_notification_channels
 
   alert_strategy {
@@ -99,7 +236,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
   for_each = local.typesense_log_checks
 
   project      = local.typesense_project
-  display_name = "Typesense ERROR logs (cluster=${var.typesense.cluster_name}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense ERROR logs (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -109,11 +246,20 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
       filter = <<-EOT
         resource.type="k8s_container"
         AND resource.labels.project_id="${local.typesense_project}"
-        AND resource.labels.cluster_name="${var.typesense.cluster_name}"
+        AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
         AND resource.labels.namespace_name="${each.value.namespace}"
         AND resource.labels.container_name="typesense"
         AND severity>="${each.value.min_severity}"
       EOT
+    }
+  }
+
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
     }
   }
 
@@ -139,7 +285,7 @@ resource "google_logging_metric" "typesense_log_flood" {
   filter = <<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.typesense_project}"
-    AND resource.labels.cluster_name="${var.typesense.cluster_name}"
+    AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
     AND resource.labels.namespace_name="${each.value.namespace}"
   EOT
 
@@ -147,7 +293,7 @@ resource "google_logging_metric" "typesense_log_flood" {
     metric_kind  = "DELTA"
     value_type   = "INT64"
     unit         = "1"
-    display_name = "Typesense log entry count (cluster=${var.typesense.cluster_name}, namespace=${each.value.namespace}, app=${each.key})"
+    display_name = "Typesense log entry count (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
   }
 }
 
@@ -160,7 +306,7 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
   for_each = local.typesense_flood_checks
 
   project      = local.typesense_project
-  display_name = "Typesense log flood (cluster=${var.typesense.cluster_name}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense log flood (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -184,6 +330,15 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
     }
   }
 
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
+  }
+
   notification_channels = local.typesense_notification_channels
 
   alert_strategy {
@@ -194,4 +349,240 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
   }
 
   depends_on = [google_logging_metric.typesense_log_flood]
+}
+
+# Alert: Typesense Container Memory Limit Utilization
+# One policy per workload_check.memory_utilization entry. Thresholds the
+# non-evictable working set against the container memory limit, so alerts
+# survive vertical scaling. Requires the container to declare a memory limit.
+resource "google_monitoring_alert_policy" "typesense_workload_memory" {
+  for_each = local.typesense_workload_memory_utilization
+
+  project      = local.typesense_project
+  display_name = "Typesense memory limit utilization ${each.value.severity} ${each.value.threshold * 100}% (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense container memory limit utilization > ${each.value.threshold * 100}%"
+
+    condition_threshold {
+      filter = join("\n", compact([
+        "resource.type=\"k8s_container\"",
+        "AND resource.labels.project_id=\"${local.typesense_project}\"",
+        "AND resource.labels.cluster_name=\"${each.value.cluster_name}\"",
+        "AND resource.labels.namespace_name=\"${each.value.namespace}\"",
+        "AND resource.labels.container_name=\"${each.value.container_name}\"",
+        "AND metric.type=\"kubernetes.io/container/memory/limit_utilization\"",
+        "AND metric.labels.memory_type=\"non-evictable\"",
+        each.value.controller_name != null ? "AND metadata.system_labels.top_level_controller_name=\"${each.value.controller_name}\"" : "",
+      ]))
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
+  }
+
+  notification_channels = local.typesense_notification_channels
+
+  alert_strategy {
+    auto_close           = "${each.value.auto_close_seconds}s"
+    notification_prompts = each.value.notification_prompts
+  }
+}
+
+# Alert: Typesense Container CPU Limit Utilization
+# One policy per workload_check.cpu_utilization entry. Requires the container
+# to declare a CPU limit.
+resource "google_monitoring_alert_policy" "typesense_workload_cpu" {
+  for_each = local.typesense_workload_cpu_utilization
+
+  project      = local.typesense_project
+  display_name = "Typesense CPU limit utilization ${each.value.severity} ${each.value.threshold * 100}% (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense container CPU limit utilization > ${each.value.threshold * 100}%"
+
+    condition_threshold {
+      filter = join("\n", compact([
+        "resource.type=\"k8s_container\"",
+        "AND resource.labels.project_id=\"${local.typesense_project}\"",
+        "AND resource.labels.cluster_name=\"${each.value.cluster_name}\"",
+        "AND resource.labels.namespace_name=\"${each.value.namespace}\"",
+        "AND resource.labels.container_name=\"${each.value.container_name}\"",
+        "AND metric.type=\"kubernetes.io/container/cpu/limit_utilization\"",
+        each.value.controller_name != null ? "AND metadata.system_labels.top_level_controller_name=\"${each.value.controller_name}\"" : "",
+      ]))
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
+  }
+
+  notification_channels = local.typesense_notification_channels
+
+  alert_strategy {
+    auto_close           = "${each.value.auto_close_seconds}s"
+    notification_prompts = each.value.notification_prompts
+  }
+}
+
+# Alert: Typesense PVC Volume Utilization
+# One policy per workload_check.volume_utilization entry. Thresholds the pod
+# volume utilization of the data PVC (raft log growth while a peer is down
+# fills the disk and makes Typesense reject writes). The volume_name filter
+# keeps configmap/secret mounts out of scope.
+resource "google_monitoring_alert_policy" "typesense_workload_volume" {
+  for_each = local.typesense_workload_volume_utilization
+
+  project      = local.typesense_project
+  display_name = "Typesense volume utilization ${each.value.severity} ${each.value.threshold * 100}% (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, volume=${each.value.volume_name}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense pod volume utilization > ${each.value.threshold * 100}%"
+
+    condition_threshold {
+      filter = join("\n", compact([
+        "resource.type=\"k8s_pod\"",
+        "AND resource.labels.project_id=\"${local.typesense_project}\"",
+        "AND resource.labels.cluster_name=\"${each.value.cluster_name}\"",
+        "AND resource.labels.namespace_name=\"${each.value.namespace}\"",
+        "AND metric.type=\"kubernetes.io/pod/volume/utilization\"",
+        "AND metric.labels.volume_name=\"${each.value.volume_name}\"",
+        each.value.controller_name != null ? "AND metadata.system_labels.top_level_controller_name=\"${each.value.controller_name}\"" : "",
+      ]))
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = each.value.threshold
+      duration        = each.value.duration
+
+      aggregations {
+        alignment_period   = each.value.alignment_period
+        per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  dynamic "documentation" {
+    for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
+  }
+
+  notification_channels = local.typesense_notification_channels
+
+  alert_strategy {
+    auto_close           = "${each.value.auto_close_seconds}s"
+    notification_prompts = each.value.notification_prompts
+  }
+}
+
+# Alert: Typesense Replica Availability
+# PromQL count of running Typesense pods (konnectivity pattern). CRITICAL
+# below raft quorum floor(n/2)+1, WARNING below expected_replicas (skipped
+# when it would duplicate the CRITICAL policy). container_uptime counts
+# running containers, not ready ones: readiness regressions are covered by
+# the uptime check content matcher, this alert covers absence and crash-loops.
+resource "google_monitoring_alert_policy" "typesense_workload_replicas" {
+  for_each = local.typesense_workload_replicas
+
+  project      = local.typesense_project
+  display_name = "Typesense running pods < ${each.value.min_count} (${each.value.reason}) ${each.value.severity} (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense running pod count < ${each.value.min_count}"
+
+    condition_prometheus_query_language {
+      query = <<-PROMQL
+        (
+          count(
+            max by (pod_name) (
+              kubernetes_io:container_uptime{${join(", ", compact([
+      "monitored_resource=\"k8s_container\"",
+      "project_id=\"${local.typesense_project}\"",
+      "cluster_name=\"${each.value.cluster_name}\"",
+      "namespace_name=\"${each.value.namespace}\"",
+      "container_name=\"${each.value.container_name}\"",
+      each.value.controller_name != null ? "metadata_system_top_level_controller_name=\"${each.value.controller_name}\"" : "",
+]))}}
+            )
+          )
+          or on() vector(0)
+        ) < ${each.value.min_count}
+      PROMQL
+
+duration = "${each.value.duration_seconds}s"
+}
+}
+
+dynamic "documentation" {
+  for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+  content {
+    content   = documentation.value
+    mime_type = "text/markdown"
+  }
+}
+
+notification_channels = local.typesense_notification_channels
+
+alert_strategy {
+  auto_close           = "${each.value.auto_close_seconds}s"
+  notification_prompts = each.value.notification_prompts
+}
 }

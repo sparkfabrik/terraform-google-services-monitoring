@@ -34,6 +34,15 @@ resource "google_monitoring_uptime_check_config" "https_uptime" {
     }
   }
 
+  dynamic "content_matchers" {
+    for_each = var.content_matchers
+
+    content {
+      content = content_matchers.value.content
+      matcher = content_matchers.value.matcher
+    }
+  }
+
   monitored_resource {
     type = "uptime_url"
     labels = {
@@ -73,6 +82,15 @@ resource "google_monitoring_alert_policy" "failure_alert" {
       }
     }
     display_name = local.alert_display_name
+  }
+
+  dynamic "documentation" {
+    for_each = var.alert_documentation != null ? [var.alert_documentation] : []
+
+    content {
+      content   = documentation.value
+      mime_type = "text/markdown"
+    }
   }
 
   user_labels = var.uptime_alert_user_labels

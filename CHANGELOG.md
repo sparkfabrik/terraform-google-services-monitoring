@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Typesense `workload_check` per-app block with alert policies on container memory limit utilization (WARNING 85% / CRITICAL 95%), container CPU limit utilization (WARNING 90%), PVC volume utilization (WARNING 75% / CRITICAL 85%), and replica availability via PromQL on `kubernetes_io:container_uptime` (CRITICAL below raft quorum `floor(n/2)+1`, WARNING below `expected_replicas`).
+- `content_matchers` input on the `http_monitoring` submodule and `content_match` field on the Typesense `uptime_check` for response-content assertions.
+- Per-app `cluster_name` override on Typesense apps, falling back to the service-level `typesense.cluster_name`, honored by workload, container, log and flood checks.
+- `typesense.alert_documentation` rendered into the `documentation` block of every Typesense alert policy; `alert_documentation` input on the `http_monitoring` submodule.
+- Outputs `typesense_workload_memory_alert_policy_names`, `typesense_workload_cpu_alert_policy_names`, `typesense_workload_volume_alert_policy_names` and `typesense_workload_replicas_alert_policy_names`.
+
 ## [0.17.0] - 2026-06-17
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.16.0...0.17.0)

@@ -210,7 +210,7 @@ variable "konnectivity_agent" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints and container-level alerts (pod restarts) in GKE. Each app is identified by its name (map key)."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -218,12 +218,16 @@ variable "typesense" {
     notification_enabled  = optional(bool, true)
     notification_channels = optional(list(string), [])
     cluster_name          = optional(string, null)
+    alert_documentation   = optional(string, null)
 
     apps = optional(map(object({
+      cluster_name = optional(string, null)
+
       uptime_check = optional(object({
-        enabled = optional(bool, true)
-        host    = string
-        path    = optional(string, "/readyz")
+        enabled       = optional(bool, true)
+        host          = string
+        path          = optional(string, "/readyz")
+        content_match = optional(string, null)
       }), null)
 
       container_check = optional(object({
@@ -255,6 +259,69 @@ variable "typesense" {
         auto_close_seconds           = optional(number, 86400)
         notification_rate_limit      = optional(string, "3600s")
       }), null)
+
+      # Workload vitals: saturation and availability alerts built on free GKE
+      # system metrics. Requires containers to declare resource limits
+      # (limit_utilization has no series otherwise). Each threshold family is
+      # disabled by emptying its list; replica alerts via replica_availability.enabled.
+      workload_check = optional(object({
+        enabled           = optional(bool, true)
+        namespace         = string
+        expected_replicas = number
+        container_name    = optional(string, "typesense")
+        # Disambiguates multiple TypesenseClusters sharing a namespace
+        # (top-level controller name, e.g. the operator-generated StatefulSet).
+        controller_name = optional(string, null)
+        # PVC volume to watch; "data" is the Typesense operator's PVC template name.
+        volume_name = optional(string, "data")
+        memory_utilization = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = optional(number, 0.85)
+          alignment_period = optional(string, "300s")
+          duration         = optional(string, "300s")
+          })), [
+          {
+            severity  = "WARNING",
+            threshold = 0.85,
+          },
+          {
+            severity  = "CRITICAL",
+            threshold = 0.95,
+          }
+        ])
+        cpu_utilization = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = optional(number, 0.90)
+          alignment_period = optional(string, "300s")
+          duration         = optional(string, "300s")
+          })), [
+          {
+            severity  = "WARNING",
+            threshold = 0.90,
+          }
+        ])
+        volume_utilization = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = optional(number, 0.75)
+          alignment_period = optional(string, "300s")
+          duration         = optional(string, "300s")
+          })), [
+          {
+            severity  = "WARNING",
+            threshold = 0.75,
+          },
+          {
+            severity  = "CRITICAL",
+            threshold = 0.85,
+          }
+        ])
+        replica_availability = optional(object({
+          enabled          = optional(bool, true)
+          duration_seconds = optional(number, 300)
+        }), {})
+        auto_close_seconds   = optional(number, 3600)
+        notification_prompts = optional(list(string), null)
+      }), null)
     })), {})
   })
 
@@ -265,18 +332,30 @@ variable "typesense" {
         (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
         (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true) &&
         (config.log_check != null ? try(trimspace(config.log_check.namespace), "") != "" : true) &&
-        (config.flood_check != null ? try(trimspace(config.flood_check.namespace), "") != "" : true)
+        (config.flood_check != null ? try(trimspace(config.flood_check.namespace), "") != "" : true) &&
+        (config.workload_check != null ? try(trimspace(config.workload_check.namespace), "") != "" : true)
       )
     ])
-    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check is provided, 'namespace' must be non-empty. If log_check is provided, 'namespace' must be non-empty. If flood_check is provided, 'namespace' must be non-empty."
+    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check, log_check, flood_check or workload_check is provided, its 'namespace' must be non-empty."
   }
 
   validation {
-    condition = (
-      length([for app_name, config in var.typesense.apps : app_name if config.container_check != null || config.log_check != null || config.flood_check != null]) == 0 ||
-      try(trimspace(var.typesense.cluster_name), "") != ""
-    )
-    error_message = "When any app has container_check, log_check, or flood_check configured, 'cluster_name' must be provided at the typesense level."
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.workload_check == null || try(config.workload_check.expected_replicas >= 1, false)
+      )
+    ])
+    error_message = "If workload_check is provided, 'expected_replicas' must be >= 1."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        (config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null) ||
+        try(trimspace(coalesce(config.cluster_name, var.typesense.cluster_name)), "") != ""
+      )
+    ])
+    error_message = "Each app with container_check, log_check, flood_check or workload_check configured must have a resolvable GKE cluster name: set 'cluster_name' on the app or at the typesense level."
   }
 }
 
