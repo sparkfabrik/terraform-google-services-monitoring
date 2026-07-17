@@ -53,3 +53,7 @@ output "typesense_workload_volume_alert_policy_names" {
 output "typesense_workload_replicas_alert_policy_names" {
   value = { for k, v in google_monitoring_alert_policy.typesense_workload_replicas : k => v.name }
 }
+
+output "typesense_dashboard_ids" {
+  value = { for k, v in google_monitoring_dashboard.typesense_app : k => v.id }
+}

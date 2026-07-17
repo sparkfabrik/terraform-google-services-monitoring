@@ -210,7 +210,7 @@ variable "konnectivity_agent" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix. Notification routing resolves per check: each check block accepts 'notification_enabled' (tri-state, null inherits the service-level setting) and 'notification_channels' (null inherits the service-level list when non-empty, otherwise the root 'notification_channels'); the most specific non-null setting wins. When the effective 'notification_enabled' is false the check's policies are created with no notification channels; an empty override list is legal and also results in no notifications."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix. Notification routing resolves per check: each check block accepts 'notification_enabled' (tri-state, null inherits the service-level setting) and 'notification_channels' (null inherits the service-level list when non-empty, otherwise the root 'notification_channels'); the most specific non-null setting wins. When the effective 'notification_enabled' is false the check's policies are created with no notification channels; an empty override list is legal and also results in no notifications. Each app can additionally enable a per-app Cloud Monitoring dashboard ('dashboard' block): widgets are built only from the checks the app configures, the title defaults to 'Typesense vitals — <app> (cluster=..., namespace=...)' and can be overridden via 'display_name'. Apps with both 'log_check' and the dashboard enabled also get a log-based counter metric for error logs feeding the dashboard's error-log rate chart."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -328,6 +328,14 @@ variable "typesense" {
         notification_enabled  = optional(bool, null)
         notification_channels = optional(list(string), null)
       }), null)
+
+      # Per-app Cloud Monitoring dashboard built from the metrics the module
+      # already wires (GKE system metrics, log-based metrics, uptime checks).
+      # Widgets render only for the checks the app configures.
+      dashboard = optional(object({
+        enabled      = optional(bool, true)
+        display_name = optional(string, null)
+      }), null)
     })), {})
   })
 
@@ -420,6 +428,20 @@ variable "typesense" {
       )
     ])
     error_message = "Each app with container_check, log_check, flood_check or workload_check configured must have a resolvable GKE cluster name: set 'cluster_name' on the app or at the typesense level."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.dashboard == null ||
+        config.uptime_check != null ||
+        config.container_check != null ||
+        config.log_check != null ||
+        config.flood_check != null ||
+        config.workload_check != null
+      )
+    ])
+    error_message = "Each app with 'dashboard' configured must define at least one check (uptime_check, container_check, log_check, flood_check or workload_check): a dashboard without checks has nothing to render."
   }
 }
 
