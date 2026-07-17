@@ -338,14 +338,7 @@ variable "typesense" {
         try(trimspace(config.namespace), "") != ""
       )
     ])
-    error_message = format(
-      "Each app with container_check, log_check, flood_check or workload_check configured must set a non-empty app-level 'namespace'. Offending app(s): %s.",
-      join(", ", [
-        for app_name, config in var.typesense.apps : app_name
-        if !(config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null) &&
-        try(trimspace(config.namespace), "") == ""
-      ])
-    )
+    error_message = "Each app with container_check, log_check, flood_check or workload_check configured must set a non-empty app-level 'namespace'."
   }
 
   validation {

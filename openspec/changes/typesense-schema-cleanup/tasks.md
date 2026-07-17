@@ -4,7 +4,7 @@
 
 - [x] 1.1 Add `namespace = optional(string, null)` at the app level, next to `cluster_name`; remove the `namespace` attribute from `container_check`, `log_check`, `flood_check` and `workload_check`.
 - [x] 1.2 Rename/retype timing fields: `pod_restart.alignment_period` → `alignment_period_seconds` (number), `pod_restart.duration` → `duration_seconds` (number); workload threshold lists `alignment_period`/`duration` (strings) → `alignment_period_seconds`/`duration_seconds` (numbers, defaults 300); `log_check.logmatch_notification_rate_limit` (string `"300s"`) → `logmatch_notification_rate_limit_seconds` (number, default 300).
-- [x] 1.3 Update validations: app-level `namespace` required when any Kubernetes-based check is configured (name the app key in the message); all `_seconds` fields validated `> 0`; drop the per-block namespace validations.
+- [x] 1.3 Update validations: app-level `namespace` required when any Kubernetes-based check is configured (static message: dynamic error messages need Terraform 1.9+ and the module keeps `>= 1.5`); all `_seconds` fields validated `> 0`; drop the per-block namespace validations.
 - [x] 1.4 Update the `typesense` variable description (namespace placement, timing convention).
 
 ## 2. Service file (typesense.tf)
@@ -23,7 +23,7 @@
 
 - [x] 4.1 `make lint` passes.
 - [ ] 4.2 Zero-diff migration check: on a downstream stack, bump the ref and migrate values verbatim; `terraform plan` must show no changes.
-- [x] 4.3 Negative checks (revised: Terraform silently discards unknown object attributes, so no type error exists for legacy fields — see design decision 2/4): an app with `workload_check` and no app-level namespace fails validation naming the app; a negative `_seconds` value fails validation; an uptime-only app without namespace passes; a leftover block-level `namespace` or legacy `alignment_period = "300s"` is silently ignored (verified via `terraform validate` fixtures on Terraform 1.13).
+- [x] 4.3 Negative checks (revised: Terraform silently discards unknown object attributes, so no type error exists for legacy fields — see design decision 2/4): an app with `workload_check` and no app-level namespace fails validation; a negative `_seconds` value fails validation; an uptime-only app without namespace passes; a leftover block-level `namespace` or legacy `alignment_period = "300s"` is silently ignored (verified via `terraform validate` fixtures on Terraform 1.13).
 
 ## 5. Change management
 

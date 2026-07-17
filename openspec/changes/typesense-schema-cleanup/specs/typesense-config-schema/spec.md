@@ -14,16 +14,16 @@ The `typesense` app object SHALL declare `namespace` once at the app level (`app
 #### Scenario: Legacy block-level namespace
 
 - **WHEN** a configuration sets `namespace` inside any check block
-- **THEN** Terraform's object conversion silently discards the attribute and the app-level `namespace` governs all filters; if the app has no app-level `namespace`, validation fails naming the app
+- **THEN** Terraform's object conversion silently discards the attribute and the app-level `namespace` governs all filters; if the app has no app-level `namespace`, validation fails
 
 ### Requirement: Namespace required only for Kubernetes-based checks
 
-Validation SHALL fail, naming the app key, when an app configures any of `container_check`, `log_check`, `flood_check` or `workload_check` and has no app-level `namespace`. An app with only `uptime_check` SHALL be valid without a namespace.
+Validation SHALL fail when an app configures any of `container_check`, `log_check`, `flood_check` or `workload_check` and has no app-level `namespace`. The error message is static (Terraform below 1.9 cannot reference the variable in `error_message`, and the module supports `>= 1.5`), so it does not name the offending app. An app with only `uptime_check` SHALL be valid without a namespace.
 
 #### Scenario: Kubernetes check without namespace
 
 - **WHEN** an app configures `workload_check` and no `namespace`
-- **THEN** Terraform validation fails naming the app and the missing `namespace`
+- **THEN** Terraform validation fails for the missing app-level `namespace`
 
 #### Scenario: Uptime-only app
 

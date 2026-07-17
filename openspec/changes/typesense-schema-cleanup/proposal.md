@@ -6,7 +6,7 @@ The `typesense` variable schema accumulated two inconsistencies across releases.
 
 ## What Changes
 
-- **BREAKING** `namespace` moves to the app level (`apps[*].namespace`, optional string next to `cluster_name`) and is removed from `container_check`, `log_check`, `flood_check` and `workload_check`. Validation requires an app-level `namespace` when any Kubernetes-based check is configured; uptime-only apps need none. No fallback to the old location. Terraform's object conversion silently discards attributes that are not part of an `optional()` object type, so a leftover per-block `namespace` is ignored rather than rejected; the unmigrated shape (namespace only in blocks) still fails loudly through the app-level validation naming the app.
+- **BREAKING** `namespace` moves to the app level (`apps[*].namespace`, optional string next to `cluster_name`) and is removed from `container_check`, `log_check`, `flood_check` and `workload_check`. Validation requires an app-level `namespace` when any Kubernetes-based check is configured; uptime-only apps need none. No fallback to the old location. Terraform's object conversion silently discards attributes that are not part of an `optional()` object type, so a leftover per-block `namespace` is ignored rather than rejected; the unmigrated shape (namespace only in blocks) still fails loudly through the app-level validation.
 - **BREAKING** All duration-like fields become numbers of seconds with a `_seconds` suffix:
   - `container_check.pod_restart.alignment_period` → `alignment_period_seconds`, `.duration` → `duration_seconds` (numbers, values unchanged);
   - `workload_check.{memory,cpu,volume}_utilization[*].alignment_period`/`duration` (strings `"300s"`) → `alignment_period_seconds`/`duration_seconds` (numbers);

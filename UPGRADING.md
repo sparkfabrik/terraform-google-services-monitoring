@@ -14,17 +14,14 @@ breaks: a value-preserving migration produces a **zero-change plan** (the
 affected fields feed only filter strings and display names, and no resource
 addresses change).
 
-This release also raises the minimum supported Terraform version from 1.5 to
-1.9 (required by dynamic validation error messages).
-
 #### 1. `namespace` moves to the app level
 
 Declare `namespace` once per app, next to `cluster_name`, and delete it from
 `container_check`, `log_check`, `flood_check` and `workload_check`.
 
 An app that configures any of those Kubernetes-based checks without an
-app-level `namespace` fails validation with a message naming the app.
-Uptime-only apps need no namespace.
+app-level `namespace` fails validation at plan time. Uptime-only apps need
+no namespace.
 
 #### 2. Duration-like fields become `_seconds` numbers
 
