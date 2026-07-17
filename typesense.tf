@@ -11,6 +11,14 @@ locals {
     app_name => try(coalesce(config.cluster_name, var.typesense.cluster_name), null)
   }
 
+  # App-level namespace, shared by every Kubernetes-based check of the app.
+  # Apps without any Kubernetes-based check may resolve to null (validated
+  # in variables.tf otherwise).
+  typesense_namespaces = {
+    for app_name, config in var.typesense.apps :
+    app_name => config.namespace
+  }
+
   typesense_uptime_checks = var.typesense.enabled ? {
     for app_name, config in var.typesense.apps :
     app_name => config.uptime_check
@@ -68,7 +76,7 @@ locals {
           {
             app                  = app_name
             cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = wc.namespace
+            namespace            = local.typesense_namespaces[app_name]
             container_name       = wc.container_name
             controller_name      = wc.controller_name
             auto_close_seconds   = wc.auto_close_seconds
@@ -88,7 +96,7 @@ locals {
           {
             app                  = app_name
             cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = wc.namespace
+            namespace            = local.typesense_namespaces[app_name]
             container_name       = wc.container_name
             controller_name      = wc.controller_name
             auto_close_seconds   = wc.auto_close_seconds
@@ -108,7 +116,7 @@ locals {
           {
             app                  = app_name
             cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = wc.namespace
+            namespace            = local.typesense_namespaces[app_name]
             controller_name      = wc.controller_name
             volume_name          = wc.volume_name
             auto_close_seconds   = wc.auto_close_seconds
@@ -139,7 +147,7 @@ locals {
           min_count            = local.typesense_workload_replica_quorums[app_name]
           reason               = "raft quorum"
           cluster_name         = local.typesense_cluster_names[app_name]
-          namespace            = wc.namespace
+          namespace            = local.typesense_namespaces[app_name]
           container_name       = wc.container_name
           controller_name      = wc.controller_name
           duration_seconds     = wc.replica_availability.duration_seconds
@@ -154,7 +162,7 @@ locals {
           min_count            = wc.expected_replicas
           reason               = "expected replicas"
           cluster_name         = local.typesense_cluster_names[app_name]
-          namespace            = wc.namespace
+          namespace            = local.typesense_namespaces[app_name]
           container_name       = wc.container_name
           controller_name      = wc.controller_name
           duration_seconds     = wc.replica_availability.duration_seconds
@@ -193,7 +201,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
   for_each = local.typesense_container_checks
 
   project      = local.typesense_project
-  display_name = "Typesense Pod Restarts (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense Pod Restarts (cluster=${local.typesense_cluster_names[each.key]}, namespace=${local.typesense_namespaces[each.key]}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -205,16 +213,16 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
         resource.type="k8s_container"
         AND resource.labels.project_id="${local.typesense_project}"
         AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
-        AND resource.labels.namespace_name="${each.value.namespace}"
+        AND resource.labels.namespace_name="${local.typesense_namespaces[each.key]}"
         AND metric.type="kubernetes.io/container/restart_count"
       EOT
 
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.pod_restart.threshold
-      duration        = "${each.value.pod_restart.duration}s"
+      duration        = "${each.value.pod_restart.duration_seconds}s"
 
       aggregations {
-        alignment_period     = "${each.value.pod_restart.alignment_period}s"
+        alignment_period     = "${each.value.pod_restart.alignment_period_seconds}s"
         per_series_aligner   = "ALIGN_DELTA"
         cross_series_reducer = "REDUCE_SUM"
         group_by_fields = [
@@ -253,7 +261,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
   for_each = local.typesense_log_checks
 
   project      = local.typesense_project
-  display_name = "Typesense ERROR logs (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense ERROR logs (cluster=${local.typesense_cluster_names[each.key]}, namespace=${local.typesense_namespaces[each.key]}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -264,7 +272,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
         resource.type="k8s_container"
         AND resource.labels.project_id="${local.typesense_project}"
         AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
-        AND resource.labels.namespace_name="${each.value.namespace}"
+        AND resource.labels.namespace_name="${local.typesense_namespaces[each.key]}"
         AND resource.labels.container_name="typesense"
         AND severity>="${each.value.min_severity}"
       EOT
@@ -285,7 +293,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
   alert_strategy {
     auto_close = "${each.value.auto_close_seconds}s"
     notification_rate_limit {
-      period = each.value.logmatch_notification_rate_limit
+      period = "${each.value.logmatch_notification_rate_limit_seconds}s"
     }
   }
 }
@@ -303,14 +311,14 @@ resource "google_logging_metric" "typesense_log_flood" {
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.typesense_project}"
     AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
-    AND resource.labels.namespace_name="${each.value.namespace}"
+    AND resource.labels.namespace_name="${local.typesense_namespaces[each.key]}"
   EOT
 
   metric_descriptor {
     metric_kind  = "DELTA"
     value_type   = "INT64"
     unit         = "1"
-    display_name = "Typesense log entry count (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
+    display_name = "Typesense log entry count (cluster=${local.typesense_cluster_names[each.key]}, namespace=${local.typesense_namespaces[each.key]}, app=${each.key})"
   }
 }
 
@@ -323,7 +331,7 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
   for_each = local.typesense_flood_checks
 
   project      = local.typesense_project
-  display_name = "Typesense log flood (cluster=${local.typesense_cluster_names[each.key]}, namespace=${each.value.namespace}, app=${each.key})"
+  display_name = "Typesense log flood (cluster=${local.typesense_cluster_names[each.key]}, namespace=${local.typesense_namespaces[each.key]}, app=${each.key})"
   combiner     = "OR"
   enabled      = true
 
@@ -397,10 +405,10 @@ resource "google_monitoring_alert_policy" "typesense_workload_memory" {
 
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
-      duration        = each.value.duration
+      duration        = "${each.value.duration_seconds}s"
 
       aggregations {
-        alignment_period   = each.value.alignment_period
+        alignment_period   = "${each.value.alignment_period_seconds}s"
         per_series_aligner = "ALIGN_MEAN"
       }
 
@@ -455,10 +463,10 @@ resource "google_monitoring_alert_policy" "typesense_workload_cpu" {
 
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
-      duration        = each.value.duration
+      duration        = "${each.value.duration_seconds}s"
 
       aggregations {
-        alignment_period   = each.value.alignment_period
+        alignment_period   = "${each.value.alignment_period_seconds}s"
         per_series_aligner = "ALIGN_MEAN"
       }
 
@@ -515,10 +523,10 @@ resource "google_monitoring_alert_policy" "typesense_workload_volume" {
 
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold
-      duration        = each.value.duration
+      duration        = "${each.value.duration_seconds}s"
 
       aggregations {
-        alignment_period   = each.value.alignment_period
+        alignment_period   = "${each.value.alignment_period_seconds}s"
         per_series_aligner = "ALIGN_MEAN"
       }
 

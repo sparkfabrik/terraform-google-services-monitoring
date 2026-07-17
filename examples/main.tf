@@ -70,27 +70,25 @@ module "example" {
     alert_documentation = "Typesense runbook: https://runbooks.example.com/typesense"
     apps = {
       "typesense-app" = {
+        namespace = "typesense"
         uptime_check = {
           host          = "typesense.example.com"
           content_match = "\"cluster_status\":\"OK\""
         }
         container_check = {
-          enabled   = true
-          namespace = "typesense"
+          enabled = true
           pod_restart = {
             threshold = 1
           }
         }
         log_check = {
-          enabled                          = true
-          namespace                        = "typesense"
-          min_severity                     = "ERROR"
-          logmatch_notification_rate_limit = "300s"
-          auto_close_seconds               = 3600
+          enabled                                  = true
+          min_severity                             = "ERROR"
+          logmatch_notification_rate_limit_seconds = 300
+          auto_close_seconds                       = 3600
         }
         flood_check = {
           enabled                      = true
-          namespace                    = "typesense"
           threshold_entries_per_minute = 3000
           alignment_period_seconds     = 60
           duration_seconds             = 300
@@ -100,7 +98,6 @@ module "example" {
         # CPU WARNING 90%, volume WARNING 75% / CRITICAL 85%, replica availability
         # CRITICAL below raft quorum and WARNING below expected_replicas.
         workload_check = {
-          namespace         = "typesense"
           expected_replicas = 3
         }
       }
@@ -108,8 +105,8 @@ module "example" {
       # cluster_name), with every workload_check field customized.
       "typesense-app-2" = {
         cluster_name = "other-cluster"
+        namespace    = "typesense-2"
         workload_check = {
-          namespace         = "typesense-2"
           expected_replicas = 1
           container_name    = "typesense"
           controller_name   = "typesense-2-sts"
@@ -117,10 +114,10 @@ module "example" {
           # Severity is case-insensitive; the module normalizes it to uppercase.
           memory_utilization = [
             {
-              severity         = "critical"
-              threshold        = 0.90
-              alignment_period = "300s"
-              duration         = "300s"
+              severity                 = "critical"
+              threshold                = 0.90
+              alignment_period_seconds = 300
+              duration_seconds         = 300
             }
           ]
           cpu_utilization = [] # family disabled
