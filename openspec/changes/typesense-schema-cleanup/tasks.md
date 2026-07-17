@@ -1,0 +1,32 @@
+# Tasks: typesense-schema-cleanup
+
+## 1. Variable schema (variables.tf)
+
+- [ ] 1.1 Add `namespace = optional(string, null)` at the app level, next to `cluster_name`; remove the `namespace` attribute from `container_check`, `log_check`, `flood_check` and `workload_check`.
+- [ ] 1.2 Rename/retype timing fields: `pod_restart.alignment_period` → `alignment_period_seconds` (number), `pod_restart.duration` → `duration_seconds` (number); workload threshold lists `alignment_period`/`duration` (strings) → `alignment_period_seconds`/`duration_seconds` (numbers, defaults 300); `log_check.logmatch_notification_rate_limit` (string `"300s"`) → `logmatch_notification_rate_limit_seconds` (number, default 300).
+- [ ] 1.3 Update validations: app-level `namespace` required when any Kubernetes-based check is configured (name the app key in the message); all `_seconds` fields validated `> 0`; drop the per-block namespace validations.
+- [ ] 1.4 Update the `typesense` variable description (namespace placement, timing convention).
+
+## 2. Service file (typesense.tf)
+
+- [ ] 2.1 Point every locals/filter/display-name reference of a block-level `namespace` to the app-level field (container, log, flood, workload families and the log metric).
+- [ ] 2.2 Render `"${n}s"` from the renamed numeric fields wherever the provider expects Go-duration strings (workload aggregations, log rate limit).
+- [ ] 2.3 Confirm no `for_each` key composition changes (keys must stay `<app>` / `<app>--<severity>--<threshold>`), so migrated consumers get a zero-change plan.
+
+## 3. Examples and docs
+
+- [ ] 3.1 Migrate `examples/main.tf` and `examples/test.tfvars` to the new shape (namespace once per app, numeric timing fields).
+- [ ] 3.2 `make generate-docs` for the README block.
+- [ ] 3.3 CHANGELOG under `[Unreleased]`: Changed (breaking, both cleanups) with an old → new field table and a full before/after app example.
+
+## 4. Verification
+
+- [ ] 4.1 `make lint` passes.
+- [ ] 4.2 Zero-diff migration check: on a downstream stack, bump the ref and migrate values verbatim; `terraform plan` must show no changes.
+- [ ] 4.3 Negative checks: a config with a block-level `namespace` and a config with `alignment_period = "300s"` both fail plan with type errors naming the attribute; an app with `workload_check` and no namespace fails validation; an uptime-only app without namespace passes.
+
+## 5. Change management
+
+- [ ] 5.1 Spec-first: commit artifacts and open the spec PR for review before implementation (breaking interface change).
+- [ ] 5.2 Implementation PR: `feat(typesense)!:` conventional commit with the issue ref.
+- [ ] 5.3 After merge: sync delta specs into `openspec/specs/`, archive the change, tag the breaking minor release.
