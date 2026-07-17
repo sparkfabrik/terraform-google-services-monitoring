@@ -21,6 +21,34 @@ The module SHALL create a `google_monitoring_alert_policy` with a `condition_mat
 - **WHEN** a Typesense app does not include `log_check` (null)
 - **THEN** no alert policy is created for that app's log_check
 
+### Requirement: Configurable minimum severity
+
+The `log_check` object SHALL accept a `min_severity` field (default: `"ERROR"`) that controls the severity threshold in the log filter.
+
+#### Scenario: Custom severity threshold
+
+- **WHEN** an app has `namespace = "ts-ns"` and `log_check = { min_severity = "WARNING" }` configured
+- **THEN** the log filter uses `severity>=WARNING` instead of the default `severity>=ERROR`
+
+#### Scenario: Default severity
+
+- **WHEN** `min_severity` is not specified
+- **THEN** the log filter uses `severity>=ERROR`
+
+### Requirement: threshold_entries_per_minute defaults to 1000
+
+The `flood_check.threshold_entries_per_minute` field SHALL default to `1000` entries per minute. Operators SHOULD override with a value appropriate for their environment's baseline log volume.
+
+#### Scenario: Default threshold
+
+- **WHEN** `flood_check` is configured without specifying `threshold_entries_per_minute`
+- **THEN** the threshold defaults to `1000` entries per minute
+
+#### Scenario: Custom threshold
+
+- **WHEN** an app has `namespace = "ts-ns"` and `flood_check = { threshold_entries_per_minute = 3000 }` configured
+- **THEN** the alert fires when the log rate exceeds `3000` entries per minute
+
 ### Requirement: Notification rate limiting
 
 The alert policy SHALL include a `notification_rate_limit` in its `alert_strategy`, controlled by the `logmatch_notification_rate_limit_seconds` field (number of seconds, default: `300`).

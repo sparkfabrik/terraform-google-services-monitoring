@@ -15,18 +15,18 @@
 
 ## 3. Examples and docs
 
-- [x] 3.1 Migrate `examples/main.tf` and `examples/test.tfvars` to the new shape (namespace once per app, numeric timing fields).
+- [x] 3.1 Migrate `examples/main.tf` to the new shape (namespace once per app, numeric timing fields). `examples/test.tfvars` contains no typesense values, nothing to migrate there.
 - [x] 3.2 `make generate-docs` for the README block.
 - [x] 3.3 Migration docs: short breaking entries in CHANGELOG under `[Unreleased]` referencing a new `UPGRADING.md`, which carries the old → new field table, a full before/after app example and the silent-drop warning.
 
 ## 4. Verification
 
 - [x] 4.1 `make lint` passes.
-- [ ] 4.2 Zero-diff migration check: on a downstream stack, bump the ref and migrate values verbatim; `terraform plan` must show no changes.
+- [x] 4.2 Zero-diff migration check: on a downstream stack, bump the ref and migrate values verbatim; `terraform plan` must show no changes. _Verified locally (2026-07-17) on a consumer stack pinned to commit `77e29e3`: after migrating the two typesense apps (namespace hoisted to app level, no timing fields in use), `terraform plan` reported `0 to change, 0 to destroy` across all existing typesense policies; the only additions were the two flood policies still missing from the consumer's pre-fix state (created by the flood-rate-limit fix, unrelated to this change). Negative check also reproduced on the same stack: the unmigrated shape failed validation with the static app-level namespace message, confirming legacy block attributes are silently discarded and caught by validation._
 - [x] 4.3 Negative checks (revised: Terraform silently discards unknown object attributes, so no type error exists for legacy fields — see design decision 2/4): an app with `workload_check` and no app-level namespace fails validation; a negative `_seconds` value fails validation; an uptime-only app without namespace passes; a leftover block-level `namespace` or legacy `alignment_period = "300s"` is silently ignored (verified via `terraform validate` fixtures on Terraform 1.13).
 
 ## 5. Change management
 
-- [ ] 5.1 Spec-first: commit artifacts and open the spec PR for review before implementation (breaking interface change).
-- [ ] 5.2 Implementation PR: `feat(typesense)!:` conventional commit with the issue ref.
+- [x] 5.1 Spec-first (revised): artifacts committed first on the branch, but spec and implementation were combined into a single PR (#35) at the maintainer's request instead of a separate spec-review PR.
+- [x] 5.2 Implementation PR: `feat(typesense)!:` conventional commit with the issue ref (PR #35, combined with the spec artifacts).
 - [ ] 5.3 After merge: sync delta specs into `openspec/specs/`, archive the change, tag the breaking minor release.

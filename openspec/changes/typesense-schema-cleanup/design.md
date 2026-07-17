@@ -10,7 +10,7 @@ The `typesense` variable grew check by check across releases; each Kubernetes-ba
 
 - One declaration of `namespace` per app, next to `cluster_name`.
 - One timing convention: numbers of seconds, `_seconds` suffix, everywhere.
-- Loud, self-explanatory plan-time failures for unmigrated configurations.
+- Loud plan-time failure for the common unmigrated shape (missing app-level `namespace`); documented behavior for what Terraform cannot reject (silently dropped legacy attributes).
 - Zero infrastructure diff for a value-preserving migration.
 
 **Non-Goals**
