@@ -56,7 +56,7 @@ The dashboard SHALL render, conditionally on the app's configured checks: with `
 
 ### Requirement: Topology-independent layout
 
-Every time-series chart SHALL group by `pod_name` so one line per pod appears automatically; the dashboard JSON SHALL be identical for apps of any `expected_replicas` value (1, 3, 5, ...) except for the integer scorecard thresholds derived from `expected_replicas`.
+Every Kubernetes-backed time-series chart SHALL group by `pod_name` so one line per pod appears automatically (uptime-check charts carry no pod label and SHALL group by checker location instead); the dashboard JSON SHALL be identical for apps of any `expected_replicas` value (1, 3, 5, ...) except for the integer scorecard thresholds derived from `expected_replicas`.
 
 #### Scenario: Same layout across replica counts
 
