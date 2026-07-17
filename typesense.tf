@@ -358,11 +358,10 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
 
   notification_channels = local.typesense_notification_channels
 
+  # notification_rate_limit is only accepted by the API on condition_matched_log
+  # policies; this policy uses condition_threshold, so none is set here.
   alert_strategy {
     auto_close = "${each.value.auto_close_seconds}s"
-    notification_rate_limit {
-      period = each.value.notification_rate_limit
-    }
   }
 
   depends_on = [google_logging_metric.typesense_log_flood]

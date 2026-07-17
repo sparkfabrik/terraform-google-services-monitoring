@@ -95,7 +95,6 @@ module "example" {
           alignment_period_seconds     = 60
           duration_seconds             = 300
           auto_close_seconds           = 86400
-          notification_rate_limit      = "3600s"
         }
         # Workload vitals with curated defaults: memory WARNING 85% / CRITICAL 95%,
         # CPU WARNING 90%, volume WARNING 75% / CRITICAL 85%, replica availability

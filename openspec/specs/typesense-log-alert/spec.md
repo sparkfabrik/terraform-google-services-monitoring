@@ -1,9 +1,7 @@
 ## Purpose
 
 Log-based monitoring for Typesense GKE containers. Provides two capabilities: (1) a log severity alert (`log_check`) that fires on ERROR or higher log entries, and (2) a log flood alert (`flood_check`) that fires when log entry rate exceeds a configured threshold, catching Raft consensus storms and similar failure modes before they impact billing.
-
 ## Requirements
-
 ### Requirement: Log-based alert per Typesense app
 
 The module SHALL create a `google_monitoring_alert_policy` with a `condition_matched_log` condition for each Typesense app that has `log_check` configured and enabled.
@@ -137,12 +135,22 @@ The module SHALL create a `google_logging_metric` counter resource for each Type
 
 ### Requirement: Flood alert policy per Typesense app with flood_check
 
-The module SHALL create a `google_monitoring_alert_policy` with a `condition_threshold` condition for each Typesense app that has `flood_check` configured and enabled. The condition SHALL use `ALIGN_RATE` on the user-defined log metric and fire when the rate exceeds `threshold_entries_per_minute`.
+The module SHALL create a `google_monitoring_alert_policy` with a `condition_threshold` condition for each Typesense app that has `flood_check` configured and enabled. The condition SHALL use `ALIGN_RATE` on the user-defined log metric and fire when the rate exceeds `threshold_entries_per_minute`. The policy's `alert_strategy` MUST NOT set `notification_rate_limit` (the Cloud Monitoring API rejects it on metric-threshold policies) and SHALL keep `auto_close`. The `flood_check` object schema MUST NOT accept a `notification_rate_limit` attribute; a configuration that sets it SHALL fail at plan time with a type error.
 
 #### Scenario: Flood alert fires above threshold
 
 - **WHEN** the log entry rate from the Typesense container exceeds `threshold_entries_per_minute` for the configured `duration`
 - **THEN** the alert policy fires and an incident is opened
+
+#### Scenario: Flood alert applies successfully
+
+- **WHEN** a Typesense app has `flood_check` configured with defaults
+- **THEN** `terraform apply` creates the policy without error and its `alert_strategy` contains `auto_close` and no `notification_rate_limit`
+
+#### Scenario: Removed field set explicitly
+
+- **WHEN** a consumer sets `flood_check.notification_rate_limit = "600s"`
+- **THEN** `terraform plan` fails with a type error naming the unexpected `notification_rate_limit` attribute
 
 ### Requirement: threshold_entries_per_minute defaults to 1000
 
@@ -184,3 +192,4 @@ The module SHALL expose an output `typesense_flood_alert_policy_names` mapping a
 
 - **WHEN** two apps have `flood_check` enabled
 - **THEN** the output contains a map with two entries keyed by app name
+

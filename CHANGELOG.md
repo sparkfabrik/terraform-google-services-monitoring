@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- `flood_check.notification_rate_limit` input on Typesense apps; the flood alert policy no longer sets a notification rate limit and configurations that set the field fail validation at plan time.
+
+### Fixed
+
+- Typesense flood alert policy creation rejected by the Cloud Monitoring API with `Error 400: only log-based alert policies may specify a notification rate limit`; the `notification_rate_limit` block is removed from the policy's `alert_strategy`.
+
 ## [0.18.0] - 2026-07-16
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.17.0...0.18.0)
