@@ -11,6 +11,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `UPGRADING.md` with migration notes for breaking changes.
+- Per-check `notification_enabled` (tri-state, `null` inherits the service-level setting) on every Typesense check block (`uptime_check`, `container_check`, `log_check`, `flood_check`, `workload_check`); `false` creates the check's policies with no notification channels, `true` forces notifications on even when the service level disables them.
+- Per-check `notification_channels` override (`null` inherits) on every Typesense check block; resolution order is check level, then service level, then root `notification_channels`, and an empty override list is legal.
 
 ### Changed
 

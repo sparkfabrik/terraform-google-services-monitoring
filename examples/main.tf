@@ -93,6 +93,8 @@ module "example" {
           alignment_period_seconds     = 60
           duration_seconds             = 300
           auto_close_seconds           = 86400
+          # Silent check: incidents still open in the console, nobody is notified.
+          notification_enabled = false
         }
         # Workload vitals with curated defaults: memory WARNING 85% / CRITICAL 95%,
         # CPU WARNING 90%, volume WARNING 75% / CRITICAL 85%, replica availability
@@ -132,6 +134,9 @@ module "example" {
           }
           auto_close_seconds   = 7200
           notification_prompts = ["CLOSED"]
+          # Check-level channel override: this block's policies notify only this
+          # list; sibling checks keep the service-level routing.
+          notification_channels = ["low-urgency-channel"]
         }
       }
     }

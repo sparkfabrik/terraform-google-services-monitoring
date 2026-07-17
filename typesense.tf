@@ -1,7 +1,34 @@
 locals {
   typesense_project = var.typesense.project_id != null ? var.typesense.project_id : var.project_id
 
-  typesense_notification_channels = var.typesense.notification_enabled ? (length(var.typesense.notification_channels) > 0 ? var.typesense.notification_channels : var.notification_channels) : []
+  # Per-app-per-check notification routing. The most specific non-null
+  # setting wins: check-level notification_enabled/notification_channels,
+  # then the service level, then the root notification_channels. A check
+  # resolving to disabled gets an empty list; an empty override list is
+  # legal and also means no notifications. All five keys exist for every
+  # app (null checks resolve to []), so lookups never depend on the
+  # policy for_each filters staying aligned with this map.
+  typesense_check_notification_channels = {
+    for app_name, config in var.typesense.apps :
+    app_name => {
+      for check_name, check in {
+        uptime_check    = config.uptime_check
+        container_check = config.container_check
+        log_check       = config.log_check
+        flood_check     = config.flood_check
+        workload_check  = config.workload_check
+      } :
+      check_name => (
+        check == null ? [] : (
+          coalesce(check.notification_enabled, var.typesense.notification_enabled) ? (
+            check.notification_channels != null
+            ? check.notification_channels
+            : (length(var.typesense.notification_channels) > 0 ? var.typesense.notification_channels : var.notification_channels)
+          ) : []
+        )
+      )
+    }
+  }
 
   # Per-app GKE cluster resolution: app-level override wins, service-level
   # value is the fallback. Apps without any Kubernetes-based check may
@@ -74,13 +101,14 @@ locals {
         for memory_utilization in wc.memory_utilization :
         merge(
           {
-            app                  = app_name
-            cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = local.typesense_namespaces[app_name]
-            container_name       = wc.container_name
-            controller_name      = wc.controller_name
-            auto_close_seconds   = wc.auto_close_seconds
-            notification_prompts = wc.notification_prompts
+            app                   = app_name
+            cluster_name          = local.typesense_cluster_names[app_name]
+            namespace             = local.typesense_namespaces[app_name]
+            container_name        = wc.container_name
+            controller_name       = wc.controller_name
+            auto_close_seconds    = wc.auto_close_seconds
+            notification_prompts  = wc.notification_prompts
+            notification_channels = local.typesense_check_notification_channels[app_name].workload_check
           },
           memory_utilization
         )
@@ -94,13 +122,14 @@ locals {
         for cpu_utilization in wc.cpu_utilization :
         merge(
           {
-            app                  = app_name
-            cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = local.typesense_namespaces[app_name]
-            container_name       = wc.container_name
-            controller_name      = wc.controller_name
-            auto_close_seconds   = wc.auto_close_seconds
-            notification_prompts = wc.notification_prompts
+            app                   = app_name
+            cluster_name          = local.typesense_cluster_names[app_name]
+            namespace             = local.typesense_namespaces[app_name]
+            container_name        = wc.container_name
+            controller_name       = wc.controller_name
+            auto_close_seconds    = wc.auto_close_seconds
+            notification_prompts  = wc.notification_prompts
+            notification_channels = local.typesense_check_notification_channels[app_name].workload_check
           },
           cpu_utilization
         )
@@ -114,13 +143,14 @@ locals {
         for volume_utilization in wc.volume_utilization :
         merge(
           {
-            app                  = app_name
-            cluster_name         = local.typesense_cluster_names[app_name]
-            namespace            = local.typesense_namespaces[app_name]
-            controller_name      = wc.controller_name
-            volume_name          = wc.volume_name
-            auto_close_seconds   = wc.auto_close_seconds
-            notification_prompts = wc.notification_prompts
+            app                   = app_name
+            cluster_name          = local.typesense_cluster_names[app_name]
+            namespace             = local.typesense_namespaces[app_name]
+            controller_name       = wc.controller_name
+            volume_name           = wc.volume_name
+            auto_close_seconds    = wc.auto_close_seconds
+            notification_prompts  = wc.notification_prompts
+            notification_channels = local.typesense_check_notification_channels[app_name].workload_check
           },
           volume_utilization
         )
@@ -142,32 +172,34 @@ locals {
     merge(
       {
         "${app_name}--CRITICAL" = {
-          app                  = app_name
-          severity             = "CRITICAL"
-          min_count            = local.typesense_workload_replica_quorums[app_name]
-          reason               = "raft quorum"
-          cluster_name         = local.typesense_cluster_names[app_name]
-          namespace            = local.typesense_namespaces[app_name]
-          container_name       = wc.container_name
-          controller_name      = wc.controller_name
-          duration_seconds     = wc.replica_availability.duration_seconds
-          auto_close_seconds   = wc.auto_close_seconds
-          notification_prompts = wc.notification_prompts
+          app                   = app_name
+          severity              = "CRITICAL"
+          min_count             = local.typesense_workload_replica_quorums[app_name]
+          reason                = "raft quorum"
+          cluster_name          = local.typesense_cluster_names[app_name]
+          namespace             = local.typesense_namespaces[app_name]
+          container_name        = wc.container_name
+          controller_name       = wc.controller_name
+          duration_seconds      = wc.replica_availability.duration_seconds
+          auto_close_seconds    = wc.auto_close_seconds
+          notification_prompts  = wc.notification_prompts
+          notification_channels = local.typesense_check_notification_channels[app_name].workload_check
         }
       },
       wc.expected_replicas > local.typesense_workload_replica_quorums[app_name] ? {
         "${app_name}--WARNING" = {
-          app                  = app_name
-          severity             = "WARNING"
-          min_count            = wc.expected_replicas
-          reason               = "expected replicas"
-          cluster_name         = local.typesense_cluster_names[app_name]
-          namespace            = local.typesense_namespaces[app_name]
-          container_name       = wc.container_name
-          controller_name      = wc.controller_name
-          duration_seconds     = wc.replica_availability.duration_seconds
-          auto_close_seconds   = wc.auto_close_seconds
-          notification_prompts = wc.notification_prompts
+          app                   = app_name
+          severity              = "WARNING"
+          min_count             = wc.expected_replicas
+          reason                = "expected replicas"
+          cluster_name          = local.typesense_cluster_names[app_name]
+          namespace             = local.typesense_namespaces[app_name]
+          container_name        = wc.container_name
+          controller_name       = wc.controller_name
+          duration_seconds      = wc.replica_availability.duration_seconds
+          auto_close_seconds    = wc.auto_close_seconds
+          notification_prompts  = wc.notification_prompts
+          notification_channels = local.typesense_check_notification_channels[app_name].workload_check
         }
       } : {}
     ) if wc.replica_availability.enabled
@@ -181,7 +213,7 @@ module "typesense_uptime_checks" {
   gcp_project_id              = local.typesense_project
   uptime_monitoring_host      = each.value.host
   uptime_monitoring_path      = each.value.path
-  alert_notification_channels = local.typesense_notification_channels
+  alert_notification_channels = local.typesense_check_notification_channels[each.key].uptime_check
   alert_threshold_value       = 1
   uptime_check_period         = "900s"
   alert_documentation         = var.typesense.alert_documentation
@@ -245,7 +277,7 @@ resource "google_monitoring_alert_policy" "typesense_pod_restart" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = local.typesense_check_notification_channels[each.key].container_check
 
   alert_strategy {
     auto_close           = "${each.value.pod_restart.auto_close_seconds}s"
@@ -288,7 +320,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = local.typesense_check_notification_channels[each.key].log_check
 
   alert_strategy {
     auto_close = "${each.value.auto_close_seconds}s"
@@ -364,7 +396,7 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = local.typesense_check_notification_channels[each.key].flood_check
 
   # notification_rate_limit is only accepted by the API on condition_matched_log
   # policies; this policy uses condition_threshold, so none is set here.
@@ -427,7 +459,7 @@ resource "google_monitoring_alert_policy" "typesense_workload_memory" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = each.value.notification_channels
 
   alert_strategy {
     auto_close           = "${each.value.auto_close_seconds}s"
@@ -485,7 +517,7 @@ resource "google_monitoring_alert_policy" "typesense_workload_cpu" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = each.value.notification_channels
 
   alert_strategy {
     auto_close           = "${each.value.auto_close_seconds}s"
@@ -545,7 +577,7 @@ resource "google_monitoring_alert_policy" "typesense_workload_volume" {
     }
   }
 
-  notification_channels = local.typesense_notification_channels
+  notification_channels = each.value.notification_channels
 
   alert_strategy {
     auto_close           = "${each.value.auto_close_seconds}s"
@@ -603,7 +635,7 @@ dynamic "documentation" {
   }
 }
 
-notification_channels = local.typesense_notification_channels
+notification_channels = each.value.notification_channels
 
 alert_strategy {
   auto_close           = "${each.value.auto_close_seconds}s"
