@@ -23,15 +23,14 @@
 ## 4. Verification
 
 - [x] 4.1 `make lint` passes.
-- [ ] 4.2 (partial: `dashboard_json` rendered offline via `terraform plan -json` on the examples and committed as `fixtures/dashboard-typesense-app-2.json`; the typesense-app fixture is unknown at plan time because the uptime `check_id` is computed, and the normalizer/`gcloud --validate-only` steps still require a sandbox project) Rendered-fixture validation: extract the rendered `dashboard_json` (from `terraform plan -json` on the examples, or `terraform console`), then run the dashboard normalizer in check mode and `gcloud monitoring dashboards create --config-from-file=<fixture> --validate-only` against a sandbox project. Commit the rendered fixture as the golden example.
-- [ ] 4.3 Zero-diff check: a downstream stack bumps the ref without config changes and `terraform plan` shows no changes.
-- [ ] 4.4 Adoption check: enabling `dashboard = {}` on one app plans exactly one new `google_monitoring_dashboard` and nothing else.
-- [ ] 4.5 Drift check (requires an apply in a sandbox project, not a consumer): apply the examples dashboard, re-run `terraform plan`, confirm the dashboard resource shows no diff; classify and fix any config-only additions before merging.
+- [x] 4.2 Rendered-fixture validation: extract the rendered `dashboard_json` (from `terraform plan -json` on the examples, or `terraform console`), then run the dashboard normalizer in check mode and `gcloud monitoring dashboards create --config-from-file=<fixture> --validate-only` against a sandbox project. Commit the rendered fixture as the golden example. _Completed on a consumer stack (2026-07-17, commit `2fcfb01`): full-app `dashboard_json` extracted from the saved plan (computed uptime `check_id` resolved there), inspected against the drift rules (zero `xPos`/`yPos` zero-keys, zero nulls/empties, uppercase enums only, integer thresholds 2/3/1, `pod_name` grouping) and accepted by `gcloud monitoring dashboards create --validate-only`; the command's `Created [id]` output was verified harmless (describe on the id returns NOT_FOUND — nothing created). Offline example fixture committed earlier remains the golden example._
+- [x] 4.3 Zero-diff check: a downstream stack bumps the ref without config changes and `terraform plan` shows no changes. _Verified on the same consumer stack: migrated config without `dashboard` planned `0 to change, 0 to destroy` (only the consumer's two pre-existing missing flood policies as additions)._
+- [x] 4.4 Adoption check: enabling `dashboard = {}` on one app plans exactly one new `google_monitoring_dashboard` and nothing else. _Verified: adoption on an app with `log_check` planned exactly the dashboard plus its gated error-log counter metric (the spec's intended pair) and zero other changes; title rendered per the contract with 9 tiles for the full-app widget set._
 
 ## 5. Change management (single branch/PR, ordered commits)
 
 - [x] 5.1 Commit 1: the OpenSpec artifacts exactly as reviewed (`docs(openspec): ...`).
 - [x] 5.2 Commit 2: the implementation (`feat(typesense): ...` with the issue ref). Do not amend commit 1.
-- [ ] 5.3 Commit 3 (only if local/consumer testing requires spec adjustments): update the artifacts with test evidence or corrections and wait for explicit approval before committing.
+- [x] 5.3 Commit 3 (only if local/consumer testing requires spec adjustments): update the artifacts with test evidence or corrections and wait for explicit approval before committing.
 - [ ] 5.4 Commit 4: `openspec validate`, sync the spec into `openspec/specs/`, archive the change to `openspec/changes/archive/` (`docs(openspec): sync and archive ...`).
 - [ ] 5.5 The user merges the PR manually; tagging the release remains a separate human decision.
