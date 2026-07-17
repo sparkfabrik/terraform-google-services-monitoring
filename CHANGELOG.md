@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-07-17
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.19.0...0.19.1)
+
 ### Fixed
 
 - Typesense flood alert policy creation rejected by the Cloud Monitoring API with `Error 400: The supplied filter does not specify a valid combination of metric and monitored resource descriptors`; the condition filter now targets `resource.type="k8s_container"` (the monitored resource of the backing log-based metric) instead of `global`.
