@@ -210,7 +210,7 @@ variable "konnectivity_agent" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -222,6 +222,7 @@ variable "typesense" {
 
     apps = optional(map(object({
       cluster_name = optional(string, null)
+      namespace    = optional(string, null)
 
       uptime_check = optional(object({
         enabled       = optional(bool, true)
@@ -231,28 +232,25 @@ variable "typesense" {
       }), null)
 
       container_check = optional(object({
-        enabled   = optional(bool, true)
-        namespace = string
+        enabled = optional(bool, true)
         pod_restart = optional(object({
-          threshold            = optional(number, 0)
-          alignment_period     = optional(number, 60)
-          duration             = optional(number, 180)
-          auto_close_seconds   = optional(number, 3600)
-          notification_prompts = optional(list(string), null)
+          threshold                = optional(number, 0)
+          alignment_period_seconds = optional(number, 60)
+          duration_seconds         = optional(number, 180)
+          auto_close_seconds       = optional(number, 3600)
+          notification_prompts     = optional(list(string), null)
         }), {})
       }), null)
 
       log_check = optional(object({
-        enabled                          = optional(bool, true)
-        namespace                        = string
-        min_severity                     = optional(string, "ERROR")
-        logmatch_notification_rate_limit = optional(string, "300s")
-        auto_close_seconds               = optional(number, 3600)
+        enabled                                  = optional(bool, true)
+        min_severity                             = optional(string, "ERROR")
+        logmatch_notification_rate_limit_seconds = optional(number, 300)
+        auto_close_seconds                       = optional(number, 3600)
       }), null)
 
       flood_check = optional(object({
         enabled                      = optional(bool, true)
-        namespace                    = string
         threshold_entries_per_minute = optional(number, 1000)
         alignment_period_seconds     = optional(number, 60)
         duration_seconds             = optional(number, 300)
@@ -265,7 +263,6 @@ variable "typesense" {
       # disabled by emptying its list; replica alerts via replica_availability.enabled.
       workload_check = optional(object({
         enabled           = optional(bool, true)
-        namespace         = string
         expected_replicas = number
         container_name    = optional(string, "typesense")
         # Disambiguates multiple TypesenseClusters sharing a namespace
@@ -274,10 +271,10 @@ variable "typesense" {
         # PVC volume to watch; "data" is the Typesense operator's PVC template name.
         volume_name = optional(string, "data")
         memory_utilization = optional(list(object({
-          severity         = optional(string, "WARNING")
-          threshold        = optional(number, 0.85)
-          alignment_period = optional(string, "300s")
-          duration         = optional(string, "300s")
+          severity                 = optional(string, "WARNING")
+          threshold                = optional(number, 0.85)
+          alignment_period_seconds = optional(number, 300)
+          duration_seconds         = optional(number, 300)
           })), [
           {
             severity  = "WARNING",
@@ -289,10 +286,10 @@ variable "typesense" {
           }
         ])
         cpu_utilization = optional(list(object({
-          severity         = optional(string, "WARNING")
-          threshold        = optional(number, 0.90)
-          alignment_period = optional(string, "300s")
-          duration         = optional(string, "300s")
+          severity                 = optional(string, "WARNING")
+          threshold                = optional(number, 0.90)
+          alignment_period_seconds = optional(number, 300)
+          duration_seconds         = optional(number, 300)
           })), [
           {
             severity  = "WARNING",
@@ -300,10 +297,10 @@ variable "typesense" {
           }
         ])
         volume_utilization = optional(list(object({
-          severity         = optional(string, "WARNING")
-          threshold        = optional(number, 0.75)
-          alignment_period = optional(string, "300s")
-          duration         = optional(string, "300s")
+          severity                 = optional(string, "WARNING")
+          threshold                = optional(number, 0.75)
+          alignment_period_seconds = optional(number, 300)
+          duration_seconds         = optional(number, 300)
           })), [
           {
             severity  = "WARNING",
@@ -328,14 +325,57 @@ variable "typesense" {
     condition = alltrue([
       for app_name, config in var.typesense.apps : (
         trimspace(app_name) != "" &&
-        (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true) &&
-        (config.container_check != null ? try(trimspace(config.container_check.namespace), "") != "" : true) &&
-        (config.log_check != null ? try(trimspace(config.log_check.namespace), "") != "" : true) &&
-        (config.flood_check != null ? try(trimspace(config.flood_check.namespace), "") != "" : true) &&
-        (config.workload_check != null ? try(trimspace(config.workload_check.namespace), "") != "" : true)
+        (config.uptime_check != null ? try(trimspace(config.uptime_check.host), "") != "" : true)
       )
     ])
-    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty. If container_check, log_check, flood_check or workload_check is provided, its 'namespace' must be non-empty."
+    error_message = "Each app must have a non-empty name (map key). If uptime_check is provided, 'host' must be non-empty."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        (config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null) ||
+        try(trimspace(config.namespace), "") != ""
+      )
+    ])
+    error_message = "Each app with container_check, log_check, flood_check or workload_check configured must set a non-empty app-level 'namespace'."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : alltrue([
+        for value in concat(
+          config.container_check != null ? [
+            config.container_check.pod_restart.alignment_period_seconds,
+            config.container_check.pod_restart.duration_seconds,
+            config.container_check.pod_restart.auto_close_seconds,
+          ] : [],
+          config.log_check != null ? [
+            config.log_check.logmatch_notification_rate_limit_seconds,
+            config.log_check.auto_close_seconds,
+          ] : [],
+          config.flood_check != null ? [
+            config.flood_check.alignment_period_seconds,
+            config.flood_check.duration_seconds,
+            config.flood_check.auto_close_seconds,
+          ] : [],
+          config.workload_check != null ? concat(
+            [
+              config.workload_check.replica_availability.duration_seconds,
+              config.workload_check.auto_close_seconds,
+            ],
+            flatten([
+              for entry in concat(
+                config.workload_check.memory_utilization,
+                config.workload_check.cpu_utilization,
+                config.workload_check.volume_utilization
+              ) : [entry.alignment_period_seconds, entry.duration_seconds]
+            ])
+          ) : []
+        ) : value > 0
+      ])
+    ])
+    error_message = "Every '_seconds' timing field (alignment_period_seconds, duration_seconds, auto_close_seconds, logmatch_notification_rate_limit_seconds) must be a positive number of seconds."
   }
 
   validation {

@@ -8,6 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `UPGRADING.md` with migration notes for breaking changes.
+
+### Changed
+
+- **Breaking:** the Typesense `namespace` is declared once at the app level (`apps[*].namespace`, next to `cluster_name`) and is removed from `container_check`, `log_check`, `flood_check` and `workload_check`; migration in [UPGRADING.md](UPGRADING.md).
+- **Breaking:** every Typesense duration-like field is a number of seconds with a `_seconds` name suffix (`pod_restart.alignment_period_seconds`/`duration_seconds`, workload threshold `alignment_period_seconds`/`duration_seconds`, `log_check.logmatch_notification_rate_limit_seconds`); field mapping and before/after example in [UPGRADING.md](UPGRADING.md).
+- Every `_seconds` timing field of the Typesense variable is validated as a positive number at plan time.
+
 ### Removed
 
 - `flood_check.notification_rate_limit` input on Typesense apps; the flood alert policy no longer sets a notification rate limit and configurations that set the field fail validation at plan time.

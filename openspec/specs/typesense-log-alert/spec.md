@@ -1,19 +1,21 @@
 ## Purpose
 
 Log-based monitoring for Typesense GKE containers. Provides two capabilities: (1) a log severity alert (`log_check`) that fires on ERROR or higher log entries, and (2) a log flood alert (`flood_check`) that fires when log entry rate exceeds a configured threshold, catching Raft consensus storms and similar failure modes before they impact billing.
+
 ## Requirements
+
 ### Requirement: Log-based alert per Typesense app
 
-The module SHALL create a `google_monitoring_alert_policy` with a `condition_matched_log` condition for each Typesense app that has `log_check` configured and enabled.
+The module SHALL create a `google_monitoring_alert_policy` with a `condition_matched_log` condition for each Typesense app that has `log_check` configured and enabled. The namespace in the log filter SHALL come from the app-level `namespace`.
 
 #### Scenario: log_check enabled with defaults
 
-- **WHEN** a Typesense app has `log_check = { namespace = "typesense-prod" }` configured
+- **WHEN** a Typesense app has `namespace = "typesense-prod"` and `log_check = {}` configured
 - **THEN** the module creates an alert policy with a log filter matching `resource.type="k8s_container"`, `cluster_name`, `namespace_name="typesense-prod"`, `container_name="typesense"`, and `severity>=ERROR`
 
 #### Scenario: log_check disabled
 
-- **WHEN** a Typesense app has `log_check = { enabled = false, namespace = "typesense-prod" }` configured
+- **WHEN** a Typesense app has `log_check = { enabled = false }` configured
 - **THEN** no alert policy is created for that app's log_check
 
 #### Scenario: log_check not configured
@@ -27,7 +29,7 @@ The `log_check` object SHALL accept a `min_severity` field (default: `"ERROR"`) 
 
 #### Scenario: Custom severity threshold
 
-- **WHEN** `log_check = { namespace = "ts-ns", min_severity = "WARNING" }` is configured
+- **WHEN** an app has `namespace = "ts-ns"` and `log_check = { min_severity = "WARNING" }` configured
 - **THEN** the log filter uses `severity>=WARNING` instead of the default `severity>=ERROR`
 
 #### Scenario: Default severity
@@ -37,16 +39,16 @@ The `log_check` object SHALL accept a `min_severity` field (default: `"ERROR"`) 
 
 ### Requirement: Notification rate limiting
 
-The alert policy SHALL include a `notification_rate_limit` in its `alert_strategy`, controlled by the `logmatch_notification_rate_limit` field (default: `"300s"`).
+The alert policy SHALL include a `notification_rate_limit` in its `alert_strategy`, controlled by the `logmatch_notification_rate_limit_seconds` field (number of seconds, default: `300`).
 
 #### Scenario: Default rate limit
 
-- **WHEN** `logmatch_notification_rate_limit` is not specified
+- **WHEN** `logmatch_notification_rate_limit_seconds` is not specified
 - **THEN** the alert strategy uses `notification_rate_limit.period = "300s"`
 
 #### Scenario: Custom rate limit
 
-- **WHEN** `logmatch_notification_rate_limit = "600s"` is specified
+- **WHEN** `logmatch_notification_rate_limit_seconds = 600` is specified
 - **THEN** the alert strategy uses `notification_rate_limit.period = "600s"`
 
 ### Requirement: Auto-close configuration
@@ -116,16 +118,16 @@ The module SHALL expose an output `typesense_logmatch_alert_policy_names` mappin
 
 ### Requirement: Log-based metric per Typesense app with flood_check
 
-The module SHALL create a `google_logging_metric` counter resource for each Typesense app that has `flood_check` configured and enabled. The metric SHALL count all log entries from all containers in the configured namespace and cluster (not scoped to `container_name`).
+The module SHALL create a `google_logging_metric` counter resource for each Typesense app that has `flood_check` configured and enabled. The metric SHALL count all log entries from all containers in the app-level `namespace` and the resolved cluster (not scoped to `container_name`).
 
 #### Scenario: flood_check enabled
 
-- **WHEN** a Typesense app has `flood_check = { namespace = "typesense-stage", threshold_entries_per_minute = 3000 }` configured
+- **WHEN** a Typesense app has `namespace = "typesense-stage"` and `flood_check = { threshold_entries_per_minute = 3000 }` configured
 - **THEN** the module creates a `google_logging_metric` with a filter scoped to `resource.type="k8s_container"`, `cluster_name`, and `namespace_name="typesense-stage"` (no `container_name` filter — counts all containers in the namespace)
 
 #### Scenario: flood_check disabled
 
-- **WHEN** a Typesense app has `flood_check = { enabled = false, namespace = "typesense-stage", threshold_entries_per_minute = 3000 }` configured
+- **WHEN** a Typesense app has `flood_check = { enabled = false, threshold_entries_per_minute = 3000 }` configured
 - **THEN** no logging metric or alert policy is created for that app's flood_check
 
 #### Scenario: flood_check not configured
@@ -163,7 +165,7 @@ The `flood_check.threshold_entries_per_minute` field SHALL default to `1000` ent
 
 #### Scenario: Custom threshold
 
-- **WHEN** `flood_check = { namespace = "ts-ns", threshold_entries_per_minute = 3000 }` is configured
+- **WHEN** an app has `namespace = "ts-ns"` and `flood_check = { threshold_entries_per_minute = 3000 }` configured
 - **THEN** the alert fires when the log rate exceeds `3000` entries per minute
 
 ### Requirement: Configurable flood_check alignment and duration
@@ -175,14 +177,14 @@ The `flood_check` object SHALL accept `alignment_period_seconds` (default: `60`)
 - **WHEN** `alignment_period_seconds` and `duration_seconds` are not specified
 - **THEN** the alert uses `alignment_period = "60s"` and `duration = "300s"`
 
-### Requirement: Flood check auto-close and notification rate limit
+### Requirement: Flood check auto-close
 
-The flood alert policy SHALL include `auto_close` (default: `86400s`) and `notification_rate_limit` (default: `"3600s"`) in its `alert_strategy`. The longer defaults reflect that a log storm is a sustained operational event, not a transient spike.
+The flood alert policy SHALL include `auto_close` (default: `86400s`) in its `alert_strategy`. The longer default reflects that a log storm is a sustained operational event, not a transient spike.
 
-#### Scenario: Default auto-close and rate limit
+#### Scenario: Default auto-close
 
-- **WHEN** neither `auto_close_seconds` nor `notification_rate_limit` are specified in `flood_check`
-- **THEN** the alert strategy uses `auto_close = "86400s"` and `notification_rate_limit.period = "3600s"`
+- **WHEN** `auto_close_seconds` is not specified in `flood_check`
+- **THEN** the alert strategy uses `auto_close = "86400s"`
 
 ### Requirement: Output for flood alert policies
 
@@ -192,4 +194,3 @@ The module SHALL expose an output `typesense_flood_alert_policy_names` mapping a
 
 - **WHEN** two apps have `flood_check` enabled
 - **THEN** the output contains a map with two entries keyed by app name
-
