@@ -26,4 +26,5 @@
 ## 5. Change management
 
 - [x] 5.1 Single PR (additive, single-service change): spec artifacts + implementation, conventional commit `feat(typesense): ...` with the issue ref.
-- [ ] 5.2 After merge: sync delta specs into `openspec/specs/`, archive the change, tag the minor release.
+- [x] 5.2 Sync delta specs into `openspec/specs/` (done in this PR; `openspec validate --specs` passes).
+- [ ] 5.3 After merge: archive the change, tag the minor release.
