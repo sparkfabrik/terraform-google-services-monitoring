@@ -5,7 +5,7 @@ to move a downstream stack from the previous release. The
 [CHANGELOG](CHANGELOG.md) lists what changed; this file explains how to
 migrate.
 
-## Unreleased
+## 0.19.0
 
 ### Typesense: app-level `namespace` and uniform `_seconds` timing fields
 
