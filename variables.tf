@@ -257,7 +257,6 @@ variable "typesense" {
         alignment_period_seconds     = optional(number, 60)
         duration_seconds             = optional(number, 300)
         auto_close_seconds           = optional(number, 86400)
-        notification_rate_limit      = optional(string, "3600s")
       }), null)
 
       # Workload vitals: saturation and availability alerts built on free GKE
