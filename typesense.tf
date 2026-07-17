@@ -371,7 +371,9 @@ resource "google_monitoring_alert_policy" "typesense_flood_alert" {
     display_name = "Typesense log rate > ${each.value.threshold_entries_per_minute} entries/min"
 
     condition_threshold {
-      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.typesense_log_flood[each.key].name}\" AND resource.type=\"global\""
+      # The backing log-based metric counts k8s_container log entries, so its
+      # time series carry the k8s_container monitored resource, never global.
+      filter          = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.typesense_log_flood[each.key].name}\" AND resource.type=\"k8s_container\""
       comparison      = "COMPARISON_GT"
       threshold_value = each.value.threshold_entries_per_minute
       duration        = "${each.value.duration_seconds}s"
