@@ -32,7 +32,7 @@ Validation SHALL fail, naming the app key, when an app configures any of `contai
 
 ### Requirement: Uniform timing convention
 
-Every duration-like field of the `typesense` variable SHALL be a number of seconds with a `_seconds` name suffix. This covers `container_check.pod_restart.alignment_period_seconds` and `duration_seconds`, the `alignment_period_seconds` and `duration_seconds` entries of the `workload_check` threshold lists, `log_check.logmatch_notification_rate_limit_seconds`, and all pre-existing `_seconds` fields. The schema SHALL NOT declare any Go-duration string or bare unsuffixed duration field; legacy attribute names are not part of the type and are silently discarded by Terraform's object conversion (a Terraform limitation: extra object attributes cannot be rejected), so the CHANGELOG migration table is the contract for carrying values over.
+Every duration-like field of the `typesense` variable SHALL be a number of seconds with a `_seconds` name suffix. This covers `container_check.pod_restart.alignment_period_seconds` and `duration_seconds`, the `alignment_period_seconds` and `duration_seconds` entries of the `workload_check` threshold lists, `log_check.logmatch_notification_rate_limit_seconds`, and all pre-existing `_seconds` fields. The schema SHALL NOT declare any Go-duration string or bare unsuffixed duration field; legacy attribute names are not part of the type and are silently discarded by Terraform's object conversion (a Terraform limitation: extra object attributes cannot be rejected), so the UPGRADING.md migration table is the contract for carrying values over.
 
 #### Scenario: Workload threshold timing as numbers
 

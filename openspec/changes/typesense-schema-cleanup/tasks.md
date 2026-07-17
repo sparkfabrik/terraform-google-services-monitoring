@@ -17,7 +17,7 @@
 
 - [x] 3.1 Migrate `examples/main.tf` and `examples/test.tfvars` to the new shape (namespace once per app, numeric timing fields).
 - [x] 3.2 `make generate-docs` for the README block.
-- [x] 3.3 CHANGELOG under `[Unreleased]`: Changed (breaking, both cleanups) with an old → new field table and a full before/after app example.
+- [x] 3.3 Migration docs: short breaking entries in CHANGELOG under `[Unreleased]` referencing a new `UPGRADING.md`, which carries the old → new field table, a full before/after app example and the silent-drop warning.
 
 ## 4. Verification
 

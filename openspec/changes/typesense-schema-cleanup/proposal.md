@@ -12,10 +12,10 @@ The `typesense` variable schema accumulated two inconsistencies across releases.
   - `workload_check.{memory,cpu,volume}_utilization[*].alignment_period`/`duration` (strings `"300s"`) → `alignment_period_seconds`/`duration_seconds` (numbers);
   - `log_check.logmatch_notification_rate_limit` (string `"300s"`) → `logmatch_notification_rate_limit_seconds` (number).
   - Already conformant and unchanged: every `auto_close_seconds`, `flood_check.alignment_period_seconds`/`duration_seconds`, `replica_availability.duration_seconds`.
-  - Leftover legacy timing attributes are silently discarded by Terraform's object conversion (no type error is possible for extra attributes); the renamed `_seconds` field then takes its default. The CHANGELOG migration table is the contract for carrying values over.
+  - Leftover legacy timing attributes are silently discarded by Terraform's object conversion (no type error is possible for extra attributes); the renamed `_seconds` field then takes its default. The UPGRADING.md migration table is the contract for carrying values over.
 - Toggle semantics unchanged: block presence enables a check, `enabled` mutes it; no block gains a non-null default.
 - Migrating a configuration with identical values produces a zero-change plan: the renamed fields feed only filter strings and display names, and no `for_each` key changes.
-- CHANGELOG carries a before/after migration snippet covering both changes.
+- UPGRADING.md carries the old → new field table and a before/after migration snippet covering both changes; the CHANGELOG keeps short breaking entries referencing it.
 
 ## Capabilities
 
@@ -33,5 +33,5 @@ The `typesense` variable schema accumulated two inconsistencies across releases.
 - `variables.tf`: `typesense` object reshaped as above; validations updated (namespace-required-when-k8s-checks, positive timing numbers).
 - `typesense.tf`: locals read `apps[*].namespace`; interpolations render `"${n}s"` where the API wants Go-duration strings.
 - `examples/main.tf`, `examples/test.tfvars`: migrated to the new shape.
-- `README.md` regenerated; `CHANGELOG.md` gets Changed/Removed entries under `[Unreleased]` with the migration table; ships as a breaking minor release under 0.x semver (`feat(typesense)!`).
+- `README.md` regenerated; `CHANGELOG.md` gets short breaking entries under `[Unreleased]` pointing to the new `UPGRADING.md` (migration table and before/after example); ships as a breaking minor release under 0.x semver (`feat(typesense)!`).
 - All known consumers migrate with a small mechanical edit (delete duplicated namespaces, rename timing fields); their applied infrastructure does not change.

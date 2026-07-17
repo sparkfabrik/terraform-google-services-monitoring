@@ -8,74 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `UPGRADING.md` with migration notes for breaking changes.
+
 ### Changed
 
-- **Breaking:** the Typesense `namespace` is declared once at the app level (`apps[*].namespace`, next to `cluster_name`) and is removed from `container_check`, `log_check`, `flood_check` and `workload_check`. Validation requires the app-level `namespace` when any Kubernetes-based check is configured; uptime-only apps need none. A leftover block-level `namespace` fails `terraform plan` with a type error.
-- **Breaking:** every Typesense duration-like field is a number of seconds with a `_seconds` name suffix. Terraform silently discards attributes that are no longer part of the schema, so a leftover legacy field (e.g. `alignment_period = "600s"`) is ignored and the new field takes its default; carry every custom value over to the renamed field and review the first plan. Old to new field mapping (values carried over verbatim, e.g. `"300s"` becomes `300`):
-
-  | Old field                                                                     | New field                                                                             |
-  | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-  | `container_check.pod_restart.alignment_period` (number)                       | `container_check.pod_restart.alignment_period_seconds` (number)                       |
-  | `container_check.pod_restart.duration` (number)                               | `container_check.pod_restart.duration_seconds` (number)                               |
-  | `workload_check.{memory,cpu,volume}_utilization[*].alignment_period` (string) | `workload_check.{memory,cpu,volume}_utilization[*].alignment_period_seconds` (number) |
-  | `workload_check.{memory,cpu,volume}_utilization[*].duration` (string)         | `workload_check.{memory,cpu,volume}_utilization[*].duration_seconds` (number)         |
-  | `log_check.logmatch_notification_rate_limit` (string)                         | `log_check.logmatch_notification_rate_limit_seconds` (number)                         |
-
-  A migrated app, before and after (identical values; the migration produces a zero-change plan):
-
-  ```hcl
-  # Before
-  apps = {
-    "search" = {
-      container_check = {
-        namespace = "typesense"
-        pod_restart = {
-          alignment_period = 60
-          duration         = 180
-        }
-      }
-      log_check = {
-        namespace                        = "typesense"
-        logmatch_notification_rate_limit = "300s"
-      }
-      flood_check = {
-        namespace = "typesense"
-      }
-      workload_check = {
-        namespace         = "typesense"
-        expected_replicas = 3
-        memory_utilization = [
-          { severity = "CRITICAL", threshold = 0.95, alignment_period = "300s", duration = "300s" }
-        ]
-      }
-    }
-  }
-
-  # After
-  apps = {
-    "search" = {
-      namespace = "typesense"
-      container_check = {
-        pod_restart = {
-          alignment_period_seconds = 60
-          duration_seconds         = 180
-        }
-      }
-      log_check = {
-        logmatch_notification_rate_limit_seconds = 300
-      }
-      flood_check = {}
-      workload_check = {
-        expected_replicas = 3
-        memory_utilization = [
-          { severity = "CRITICAL", threshold = 0.95, alignment_period_seconds = 300, duration_seconds = 300 }
-        ]
-      }
-    }
-  }
-  ```
-
-- **Breaking:** the minimum supported Terraform version is raised from 1.5 to 1.9 (required by dynamic validation error messages naming the offending app).
+- **Breaking:** the Typesense `namespace` is declared once at the app level (`apps[*].namespace`, next to `cluster_name`) and is removed from `container_check`, `log_check`, `flood_check` and `workload_check`; migration in [UPGRADING.md](UPGRADING.md).
+- **Breaking:** every Typesense duration-like field is a number of seconds with a `_seconds` name suffix (`pod_restart.alignment_period_seconds`/`duration_seconds`, workload threshold `alignment_period_seconds`/`duration_seconds`, `log_check.logmatch_notification_rate_limit_seconds`); field mapping and before/after example in [UPGRADING.md](UPGRADING.md).
+- **Breaking:** the minimum supported Terraform version is raised from 1.5 to 1.9.
 - Every `_seconds` timing field of the Typesense variable is validated as a positive number at plan time.
 
 ### Removed
