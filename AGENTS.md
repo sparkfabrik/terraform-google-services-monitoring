@@ -45,6 +45,11 @@ module "example" {
 - **One `.tf` file per service** at the repo root. Look at the existing top-level files for the pattern (`ls *.tf`). Add a new service by creating a new top-level file plus a matching variable in `variables.tf`. Do not co-locate unrelated resources.
 - **Variable structure.** Each service input is a single `object({...})` variable with `optional(...)` sub-attributes and sensible defaults. Inspect `variables.tf` for the established shape before adding a new input — match the patterns already in use (e.g., `enabled`, `project_id`, `notification_channels`).
 - **README is generated.** The section between `<!-- BEGIN_TF_DOCS -->` and `<!-- END_TF_DOCS -->` in `README.md` is owned by terraform-docs (config in `.terraform-docs.yml`). Never hand-edit that region — run `make generate-docs` after touching variables, outputs, or resources.
+- **Migration notes live in `UPGRADING.md`.** The split is: `CHANGELOG.md` says _what_ changed, `UPGRADING.md` says _how_ to migrate. Rules:
+  - Every breaking change gets a short one-line CHANGELOG bullet that links to `UPGRADING.md`. Never inline tables, config examples, or multi-paragraph migration text in the CHANGELOG.
+  - Add a matching section to `UPGRADING.md` under `## Unreleased`, newest release first. When a release is tagged, rename `## Unreleased` to the version number in the same commit that cuts the CHANGELOG version.
+  - A section contains, in order: what breaks and why it fails (or doesn't fail) at plan time, an old-to-new field mapping table when more than one field is involved, a before/after configuration snippet with values carried over verbatim, a verification step stating the expected `terraform plan` outcome, and any pitfalls consumers can hit during migration (e.g. Terraform silently discards unknown object attributes, so leftover legacy fields fall back to defaults without an error).
+  - Only changes that require consumer action belong in `UPGRADING.md`. Additive or internal changes stay CHANGELOG-only.
 - **Examples.** `examples/main.tf` is the canonical usage reference and is consumed by `tflint` / `tfsec` via `examples/test.tfvars`. Keep both in sync with new inputs.
 - **Submodules.** Reusable cross-service logic lives under `modules/<name>/`. Check `ls modules/` for what currently exists before introducing a new submodule.
 - **No state in this repo.** This module never holds Terraform state — see `.gitignore` for the ignored patterns.
@@ -182,7 +187,7 @@ These commands modify state or produce a release artifact. **Always ask for user
 - `git tag` / `git push --tags` (cuts a module release consumed by downstream projects)
 - `git rebase`, `git reset --soft`, `git cherry-pick`
 - Bumping any version variable in `Makefile` or any provider constraint in `versions.tf`
-- Editing `CHANGELOG.md` for a release
+- Editing `CHANGELOG.md` or `UPGRADING.md` for a release
 - Modifying `renovate.json`
 
 ### Destructive (never run)
