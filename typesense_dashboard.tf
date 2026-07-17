@@ -370,6 +370,4 @@ resource "google_monitoring_dashboard" "typesense_app" {
       tiles   = local.typesense_dashboard_tiles[each.key]
     }
   })
-
-  depends_on = [google_logging_metric.typesense_error_logs]
 }
