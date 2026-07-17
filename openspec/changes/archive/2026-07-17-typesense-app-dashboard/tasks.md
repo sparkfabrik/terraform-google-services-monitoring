@@ -32,5 +32,4 @@
 - [x] 5.1 Commit 1: the OpenSpec artifacts exactly as reviewed (`docs(openspec): ...`).
 - [x] 5.2 Commit 2: the implementation (`feat(typesense): ...` with the issue ref). Do not amend commit 1.
 - [x] 5.3 Commit 3 (only if local/consumer testing requires spec adjustments): update the artifacts with test evidence or corrections and wait for explicit approval before committing.
-- [ ] 5.4 Commit 4: `openspec validate`, sync the spec into `openspec/specs/`, archive the change to `openspec/changes/archive/` (`docs(openspec): sync and archive ...`).
-- [ ] 5.5 The user merges the PR manually; tagging the release remains a separate human decision.
+- [x] 5.4 Commit 4: `openspec validate`, sync the spec into `openspec/specs/`, archive the change to `openspec/changes/archive/` (`docs(openspec): sync and archive ...`).
