@@ -66,6 +66,7 @@ module "example" {
   }
 
   typesense = {
+    enabled             = true
     cluster_name        = "test-cluster"
     alert_documentation = "Typesense runbook: https://runbooks.example.com/typesense"
     apps = {
@@ -102,6 +103,9 @@ module "example" {
         workload_check = {
           expected_replicas = 3
         }
+        # Per-app dashboard with the default title
+        # ("Typesense vitals — typesense-app (cluster=test-cluster, namespace=typesense)").
+        dashboard = {}
       }
       # Second app on another GKE cluster (per-app override of the service-level
       # cluster_name), with every workload_check field customized.
@@ -137,6 +141,9 @@ module "example" {
           # Check-level channel override: this block's policies notify only this
           # list; sibling checks keep the service-level routing.
           notification_channels = ["low-urgency-channel"]
+        }
+        dashboard = {
+          display_name = "Search vitals (staging)"
         }
       }
     }

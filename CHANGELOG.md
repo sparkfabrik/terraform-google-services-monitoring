@@ -13,6 +13,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `UPGRADING.md` with migration notes for breaking changes.
 - Per-check `notification_enabled` (tri-state, `null` inherits the service-level setting) on every Typesense check block (`uptime_check`, `container_check`, `log_check`, `flood_check`, `workload_check`); `false` creates the check's policies with no notification channels, `true` forces notifications on even when the service level disables them.
 - Per-check `notification_channels` override (`null` inherits) on every Typesense check block; resolution order is check level, then service level, then root `notification_channels`, and an empty override list is legal.
+- Per-app Typesense Cloud Monitoring dashboard via the optional `apps[*].dashboard` block (`enabled`, `display_name`); widgets are built from the checks the app configures (replica and uptime scorecards, per-pod memory/CPU/PVC utilization and restart charts, log-volume, error-log rate and uptime latency charts).
+- Per-app log-based counter metric `typesense_error_logs_<app>` (`severity>=ERROR`), created only for apps with both `log_check` and the dashboard enabled, backing the dashboard's error-log rate chart.
+- `typesense_dashboard_ids` output with the created dashboard ids keyed by app.
+- `uptime_check_id` output on the `http_monitoring` submodule.
+- `enabled = true` on the Typesense example so the example configuration actually plans Typesense resources.
 
 ### Changed
 

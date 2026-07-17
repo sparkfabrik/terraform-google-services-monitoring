@@ -1,0 +1,161 @@
+{
+  "displayName": "Search vitals (staging)",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "height": 8,
+        "widget": {
+          "scorecard": {
+            "thresholds": [
+              {
+                "color": "RED",
+                "direction": "BELOW",
+                "value": 1
+              }
+            ],
+            "timeSeriesQuery": {
+              "prometheusQuery": "count(max by (pod_name) (kubernetes_io:container_uptime{monitored_resource=\"k8s_container\", project_id=\"simple-project\", cluster_name=\"other-cluster\", namespace_name=\"typesense-2\", container_name=\"typesense\", metadata_system_top_level_controller_name=\"typesense-2-sts\"})) or on() vector(0)"
+            }
+          },
+          "title": "Running replicas"
+        },
+        "width": 24
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Memory limit utilization per pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "crossSeriesReducer": "REDUCE_MEAN",
+                      "groupByFields": [
+                        "resource.label.pod_name"
+                      ],
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    },
+                    "filter": "resource.type=\"k8s_container\" AND resource.labels.project_id=\"simple-project\" AND resource.labels.cluster_name=\"other-cluster\" AND resource.labels.namespace_name=\"typesense-2\" AND resource.labels.container_name=\"typesense\" AND metric.type=\"kubernetes.io/container/memory/limit_utilization\" AND metric.labels.memory_type=\"non-evictable\""
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "ratio",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "yPos": 8
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "CPU limit utilization per pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "crossSeriesReducer": "REDUCE_MEAN",
+                      "groupByFields": [
+                        "resource.label.pod_name"
+                      ],
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    },
+                    "filter": "resource.type=\"k8s_container\" AND resource.labels.project_id=\"simple-project\" AND resource.labels.cluster_name=\"other-cluster\" AND resource.labels.namespace_name=\"typesense-2\" AND resource.labels.container_name=\"typesense\" AND metric.type=\"kubernetes.io/container/cpu/limit_utilization\""
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "ratio",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 8
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "PVC volume utilization per pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "crossSeriesReducer": "REDUCE_MEAN",
+                      "groupByFields": [
+                        "resource.label.pod_name"
+                      ],
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    },
+                    "filter": "resource.type=\"k8s_pod\" AND resource.labels.project_id=\"simple-project\" AND resource.labels.cluster_name=\"other-cluster\" AND resource.labels.namespace_name=\"typesense-2\" AND metric.type=\"kubernetes.io/pod/volume/utilization\" AND metric.labels.volume_name=\"storage\""
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "ratio",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "yPos": 24
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Container restarts per pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "300s",
+                      "crossSeriesReducer": "REDUCE_SUM",
+                      "groupByFields": [
+                        "resource.label.pod_name"
+                      ],
+                      "perSeriesAligner": "ALIGN_DELTA"
+                    },
+                    "filter": "resource.type=\"k8s_container\" AND resource.labels.project_id=\"simple-project\" AND resource.labels.cluster_name=\"other-cluster\" AND resource.labels.namespace_name=\"typesense-2\" AND metric.type=\"kubernetes.io/container/restart_count\""
+                  }
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "restarts",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 24
+      }
+    ]
+  }
+}
