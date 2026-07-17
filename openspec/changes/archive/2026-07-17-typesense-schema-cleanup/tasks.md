@@ -29,4 +29,4 @@
 
 - [x] 5.1 Spec-first (revised): artifacts committed first on the branch, but spec and implementation were combined into a single PR (#35) at the maintainer's request instead of a separate spec-review PR.
 - [x] 5.2 Implementation PR: `feat(typesense)!:` conventional commit with the issue ref (PR #35, combined with the spec artifacts).
-- [ ] 5.3 After merge: sync delta specs into `openspec/specs/`, archive the change, tag the breaking minor release.
+- [x] 5.3 Sync delta specs into `openspec/specs/` and archive the change (done pre-merge in the PR at the maintainer's request). Tagging the breaking minor release remains a post-merge release step.
