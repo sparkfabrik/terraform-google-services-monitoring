@@ -210,7 +210,7 @@ variable "konnectivity_agent" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix. Notification routing resolves per check: each check block accepts 'notification_enabled' (tri-state, null inherits the service-level setting) and 'notification_channels' (null inherits the service-level list when non-empty, otherwise the root 'notification_channels'); the most specific non-null setting wins. When the effective 'notification_enabled' is false the check's policies are created with no notification channels; an empty override list is legal and also results in no notifications."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -225,14 +225,18 @@ variable "typesense" {
       namespace    = optional(string, null)
 
       uptime_check = optional(object({
-        enabled       = optional(bool, true)
-        host          = string
-        path          = optional(string, "/readyz")
-        content_match = optional(string, null)
+        enabled               = optional(bool, true)
+        host                  = string
+        path                  = optional(string, "/readyz")
+        content_match         = optional(string, null)
+        notification_enabled  = optional(bool, null)
+        notification_channels = optional(list(string), null)
       }), null)
 
       container_check = optional(object({
-        enabled = optional(bool, true)
+        enabled               = optional(bool, true)
+        notification_enabled  = optional(bool, null)
+        notification_channels = optional(list(string), null)
         pod_restart = optional(object({
           threshold                = optional(number, 0)
           alignment_period_seconds = optional(number, 60)
@@ -247,6 +251,8 @@ variable "typesense" {
         min_severity                             = optional(string, "ERROR")
         logmatch_notification_rate_limit_seconds = optional(number, 300)
         auto_close_seconds                       = optional(number, 3600)
+        notification_enabled                     = optional(bool, null)
+        notification_channels                    = optional(list(string), null)
       }), null)
 
       flood_check = optional(object({
@@ -255,6 +261,8 @@ variable "typesense" {
         alignment_period_seconds     = optional(number, 60)
         duration_seconds             = optional(number, 300)
         auto_close_seconds           = optional(number, 86400)
+        notification_enabled         = optional(bool, null)
+        notification_channels        = optional(list(string), null)
       }), null)
 
       # Workload vitals: saturation and availability alerts built on free GKE
@@ -315,8 +323,10 @@ variable "typesense" {
           enabled          = optional(bool, true)
           duration_seconds = optional(number, 300)
         }), {})
-        auto_close_seconds   = optional(number, 3600)
-        notification_prompts = optional(list(string), null)
+        auto_close_seconds    = optional(number, 3600)
+        notification_prompts  = optional(list(string), null)
+        notification_enabled  = optional(bool, null)
+        notification_channels = optional(list(string), null)
       }), null)
     })), {})
   })
