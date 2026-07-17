@@ -14,10 +14,10 @@
 ## 3. Verification
 
 - [x] 3.1 `make lint` passes.
-- [ ] 3.2 Apply check: a downstream stack with `flood_check` enabled plans and applies the flood policies without the 400 error; the created policies show `auto_close` and no notification rate limit.
-- [ ] 3.3 No-diff check: a consumer without `flood_check` sees no plan change on the version bump.
+- [x] 3.2 Apply check: a downstream stack with `flood_check` enabled plans and applies the flood policies without the 400 error; the created policies show `auto_close` and no notification rate limit. _Plan verified locally (2026-07-17) on a consumer stack pinned to commit `6a491f5`: `Plan: 2 to add, 0 to change, 0 to destroy`, both flood policies rendered with `auto_close` only. Apply convergence happens at the consumer bump after the release._
+- [x] 3.3 No-diff check: a consumer without `flood_check` sees no plan change on the version bump. _Verified in the same local plan: the second module instance (typesense disabled) and every already-applied resource showed 0 changes._
 
 ## 4. Change management
 
-- [ ] 4.1 Commit spec artifacts and implementation (single PR: trivial, single-service fix), conventional commits with the issue ref.
+- [x] 4.1 Commit spec artifacts and implementation (single PR: trivial, single-service fix), conventional commits with the issue ref. _PR #34._
 - [ ] 4.2 After merge: sync the delta spec into `openspec/specs/typesense-log-alert/` and archive the change to `openspec/changes/archive/YYYY-MM-DD-fix-typesense-flood-rate-limit/`; tag the 0.19.0 minor release.
