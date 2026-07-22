@@ -253,6 +253,7 @@ variable "typesense" {
         auto_close_seconds                       = optional(number, 3600)
         notification_enabled                     = optional(bool, null)
         notification_channels                    = optional(list(string), null)
+        notification_prompts                     = optional(list(string), null)
       }), null)
 
       flood_check = optional(object({
@@ -263,6 +264,7 @@ variable "typesense" {
         auto_close_seconds           = optional(number, 86400)
         notification_enabled         = optional(bool, null)
         notification_channels        = optional(list(string), null)
+        notification_prompts         = optional(list(string), null)
       }), null)
 
       # Workload vitals: saturation and availability alerts built on free GKE
