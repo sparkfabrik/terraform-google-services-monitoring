@@ -87,8 +87,9 @@ module "example" {
           min_severity                             = "ERROR"
           logmatch_notification_rate_limit_seconds = 300
           auto_close_seconds                       = 3600
-          # Also notify when the incident auto-closes, as evidence of recovery.
-          notification_prompts = ["OPENED", "CLOSED"]
+          # The Cloud Monitoring API only accepts ["OPENED"] on log-match
+          # policies; closure notifications are not available for them.
+          notification_prompts = ["OPENED"]
         }
         flood_check = {
           enabled                      = true
