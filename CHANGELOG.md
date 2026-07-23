@@ -8,6 +8,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-07-23
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.20.0...0.20.1)
+
+### Fixed
+
+- Plan-time validation rejecting `log_check.notification_prompts` values other than `["OPENED"]`: the Cloud Monitoring API refuses other prompts on log-match alert policies (`Error 400: log-based alert policies notification prompts must be [OPENED]`), so the 0.20.0 example of setting `["OPENED", "CLOSED"]` on `log_check` failed at apply time. The example now shows `["OPENED"]` on `log_check`; `["OPENED", "CLOSED"]` remains valid on `flood_check`, whose threshold-based policies the API accepts it for.
+
 ## [0.20.0] - 2026-07-23
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.19.1...0.20.0)

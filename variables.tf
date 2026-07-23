@@ -363,6 +363,15 @@ variable "typesense" {
 
   validation {
     condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        length(setsubtract(try(coalesce(config.log_check.notification_prompts, []), []), ["OPENED"])) == 0
+      )
+    ])
+    error_message = "log_check.notification_prompts only supports [\"OPENED\"]: the Cloud Monitoring API rejects other prompts on log-match alert policies (closure notifications are not available for them)."
+  }
+
+  validation {
+    condition = alltrue([
       for app_name, config in var.typesense.apps : alltrue([
         for value in concat(
           config.container_check != null ? [
