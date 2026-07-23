@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-23
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.19.1...0.20.0)
+
 ### Added
 
 - `notification_prompts` (optional, `null` keeps the API default of notifying on incident open only) on the Typesense `log_check` and `flood_check` blocks, wired to `alert_strategy.notification_prompts` of the log-match and flood alert policies; set `["OPENED", "CLOSED"]` to also receive a notification when the incident auto-closes.
