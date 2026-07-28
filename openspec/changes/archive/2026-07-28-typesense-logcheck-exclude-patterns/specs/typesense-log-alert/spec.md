@@ -23,14 +23,14 @@ The `log_check` object SHALL accept an `exclude_patterns` field (list of strings
 
 ### Requirement: Exclusion pattern validation
 
-The `typesense` variable validation SHALL reject, at plan time, any `log_check.exclude_patterns` entry that is an empty string or contains a double-quote character (`"`), with an error message identifying the offending app.
+The `typesense` variable validation SHALL reject, at plan time, any `log_check.exclude_patterns` entry that is an empty string or contains a double-quote character (`"`), with an error message stating the constraint and pointing at `log_check.exclude_patterns`. The message is a constant string (dynamic `error_message` expressions require Terraform >= 1.9 while the module supports >= 1.5), following the `notification_prompts` validation precedent.
 
 #### Scenario: Pattern with embedded double quote
 
 - **WHEN** an app configures `log_check = { exclude_patterns = ["bad\"pattern"] }`
-- **THEN** `terraform plan` fails with a validation error naming the app and the double-quote constraint
+- **THEN** `terraform plan` fails with a validation error stating the double-quote constraint
 
 #### Scenario: Empty pattern
 
 - **WHEN** an app configures `log_check = { exclude_patterns = [""] }`
-- **THEN** `terraform plan` fails with a validation error naming the app
+- **THEN** `terraform plan` fails with a validation error stating the non-empty constraint
