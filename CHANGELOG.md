@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `exclude_patterns` (optional, default `[]`) on the Typesense `log_check` block: a list of substrings excluded from the log-match alert filter via `AND NOT (jsonPayload.message:"<pattern>" OR textPayload:"<pattern>" ...)`; matching uses the case-insensitive Cloud Logging substring operator. The flood check and the dashboard error-log metric keep counting excluded entries. Patterns that are empty or contain a double quote are rejected at plan time.
+
 ## [0.20.1] - 2026-07-23
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.20.0...0.20.1)
