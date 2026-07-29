@@ -68,9 +68,13 @@ locals {
   # recovery lines Typesense emits after a node is replaced. Deliberately a
   # constant and not a variable: consumers tune their own noise through
   # log_check.exclude_patterns, while this list stays in one place so
-  # curation changes reach every consumer on module upgrade. The entries must
-  # satisfy the same invariant as user patterns; the precondition on
-  # google_monitoring_alert_policy.typesense_logmatch_alert enforces it.
+  # curation changes reach every consumer on module upgrade. Kyverno's
+  # service_errors_check.noise_exclusions is the other preset shape in this
+  # module, curated as a variable default; this one is opt-in because
+  # changing a default would move the alert boundary for every consumer on
+  # upgrade. Entries must satisfy the same invariant as user patterns; the
+  # precondition on google_monitoring_alert_policy.typesense_logmatch_alert
+  # asserts it.
   typesense_transient_error_patterns = [
     "Peer refresh failed",
     "> healthy write lag of",
@@ -82,17 +86,14 @@ locals {
   # deduplicated so a consumer still carrying a preset entry manually does
   # not churn the filter string. With the toggle off the user list passes
   # through verbatim, duplicates included, so the rendered filter stays
-  # byte-identical to the pre-toggle form. Kyverno's
-  # service_errors_check.noise_exclusions is the other preset shape in this
-  # module, curated as a variable default; this one is opt-in because
-  # changing a default would move the alert boundary for every consumer on
-  # upgrade.
+  # byte-identical to the pre-toggle form.
   typesense_logmatch_exclusion_patterns = {
     for app_name, lc in local.typesense_log_checks :
-    app_name => lc.exclude_transient_errors ? distinct(concat(
-      lc.exclude_patterns,
-      local.typesense_transient_error_patterns
-    )) : lc.exclude_patterns
+    app_name => (
+      lc.exclude_transient_errors
+      ? distinct(concat(lc.exclude_patterns, local.typesense_transient_error_patterns))
+      : lc.exclude_patterns
+    )
   }
 
   # Rendered exclusion clause appended to the log-match alert filter: one
@@ -380,6 +381,11 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
 
   # The preset is interpolated verbatim into the filter, so a curation
   # mistake must fail at plan time instead of shipping a malformed filter.
+  # Variable validation cannot reference locals, so the assertion lives here,
+  # on the resource that interpolates the preset. The predicate is the same
+  # one the log_check.exclude_patterns validation applies to user patterns in
+  # variables.tf (minus its null guard, the preset being a literal list);
+  # keep both copies in sync.
   lifecycle {
     precondition {
       condition = alltrue([
@@ -387,9 +393,9 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
         trimspace(pattern) != "" &&
         !strcontains(pattern, "\"") &&
         !strcontains(pattern, "\\") &&
-        !strcontains(pattern, "\n")
+        length(regexall("\\p{Cc}", pattern)) == 0
       ])
-      error_message = "Every local.typesense_transient_error_patterns entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a newline: preset patterns are embedded verbatim in the Cloud Logging filter."
+      error_message = "Module defect: every local.typesense_transient_error_patterns entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a control character: preset patterns are embedded verbatim in the Cloud Logging filter. No consumer configuration can trip this; report it against the module."
     }
   }
 }

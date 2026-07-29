@@ -4,7 +4,7 @@
 
 ### Requirement: Transient error exclusion preset
 
-The `log_check` object SHALL accept an `exclude_transient_errors` field (bool, default: `false`). When `true`, the module SHALL append a module-maintained preset of exclusion patterns to the user-provided `exclude_patterns` when building the effective exclusion list for the log-match alert filter. The preset SHALL be exactly, in order: `Peer refresh failed`, `> healthy write lag of`, `> healthy read lag of`. The preset SHALL be defined as a module constant, not configurable by consumers, and the module SHALL assert at plan time that every preset entry satisfies the exclusion pattern validation invariant (non-empty after trimming; no double quote, backslash, or newline). The effective list SHALL be the user patterns followed by the preset patterns, deduplicated byte-exact preserving first occurrence. When `false`, the effective list SHALL be the user patterns exactly as provided (no deduplication) and the rendered filter SHALL be identical to the filter produced before this field existed.
+The `log_check` object SHALL accept an `exclude_transient_errors` field (bool, default: `false`). When `true`, the module SHALL append a module-maintained preset of exclusion patterns to the user-provided `exclude_patterns` when building the effective exclusion list for the log-match alert filter. The preset SHALL be exactly, in order: `Peer refresh failed`, `> healthy write lag of`, `> healthy read lag of`. The preset SHALL be defined as a module constant, not configurable by consumers, and the module SHALL assert at plan time, for any configuration that renders the log-match alert, that every preset entry satisfies the exclusion pattern validation invariant (non-empty after trimming; no double quote, backslash, or control character). The effective list SHALL be the user patterns followed by the preset patterns, deduplicated byte-exact preserving first occurrence. When `false`, the effective list SHALL be the user patterns exactly as provided (no deduplication) and the rendered filter SHALL be identical to the filter produced before this field existed.
 
 #### Scenario: Toggle enabled with no user patterns
 
@@ -33,8 +33,8 @@ The `log_check` object SHALL accept an `exclude_transient_errors` field (bool, d
 
 #### Scenario: Preset entry violating the pattern invariant
 
-- **WHEN** the module-maintained preset contains an entry that is empty after trimming or contains `"`, `\`, or a newline
-- **THEN** `terraform plan` fails with a message stating the preset invariant
+- **WHEN** the module-maintained preset contains an entry that is empty after trimming or contains `"`, `\`, or a control character, and at least one app has an enabled `log_check`
+- **THEN** `terraform plan` fails with a message stating the preset invariant and identifying it as a module defect
 
 #### Scenario: Preset does not affect other log-based resources
 
@@ -45,7 +45,7 @@ The `log_check` object SHALL accept an `exclude_transient_errors` field (bool, d
 
 ### Requirement: Exclusion pattern validation
 
-The `typesense` variable validation SHALL reject, at plan time, any `log_check.exclude_patterns` entry that is empty after trimming whitespace or contains a double-quote character (`"`), a backslash (`\`), or a newline, with an error message stating the constraint and pointing at `log_check.exclude_patterns`. The message is a constant string (dynamic `error_message` expressions require Terraform >= 1.9 while the module supports >= 1.5), following the `notification_prompts` validation precedent.
+The `typesense` variable validation SHALL reject, at plan time, any `log_check.exclude_patterns` entry that is `null`, empty after trimming whitespace, or contains a double-quote character (`"`), a backslash (`\`), or any control character (newline, carriage return, tab, NUL, and the rest of the C0/C1 classes), with an error message stating the constraint and pointing at `log_check.exclude_patterns`. A `null` entry SHALL surface the validation error message, not an internal function error. The message is a constant string (dynamic `error_message` expressions require Terraform >= 1.9 while the module supports >= 1.5), following the `notification_prompts` validation precedent.
 
 #### Scenario: Pattern with embedded double quote
 
@@ -66,6 +66,16 @@ The `typesense` variable validation SHALL reject, at plan time, any `log_check.e
 
 - **WHEN** an app configures `log_check = { exclude_patterns = ["trailing\\"] }`
 - **THEN** `terraform plan` fails with a validation error stating the constraint (a backslash escapes the closing quote in the Cloud Logging filter grammar)
+
+#### Scenario: Pattern with control character
+
+- **WHEN** an app configures `log_check = { exclude_patterns = ["a\rb"] }` (or any other raw control character such as NUL or form feed)
+- **THEN** `terraform plan` fails with a validation error stating the constraint
+
+#### Scenario: Null pattern entry
+
+- **WHEN** an app configures `log_check = { exclude_patterns = ["a", null] }`
+- **THEN** `terraform plan` fails with the validation error message, not an internal function error
 
 ### Requirement: Log alert exclusion patterns
 

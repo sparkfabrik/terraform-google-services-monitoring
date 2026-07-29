@@ -372,17 +372,26 @@ variable "typesense" {
     error_message = "log_check.notification_prompts only supports [\"OPENED\"]: the Cloud Monitoring API rejects other prompts on log-match alert policies (closure notifications are not available for them)."
   }
 
+  # The same predicate guards the module-maintained preset, through the
+  # precondition on google_monitoring_alert_policy.typesense_logmatch_alert
+  # in typesense.tf; keep both copies in sync. A null entry is rejected by
+  # the conditional and not by a `pattern != null &&` conjunct: HCL does not
+  # short-circuit `&&` on Terraform 1.5 (the module floor), so trimspace()
+  # would still run on the null and mask this message with a function error.
+  # "\\p{Cc}" is the Unicode control class: C0, C1 and DEL.
   validation {
     condition = alltrue([
       for app_name, config in var.typesense.apps : alltrue([
         for pattern in try(config.log_check.exclude_patterns, []) :
-        trimspace(pattern) != "" &&
-        !strcontains(pattern, "\"") &&
-        !strcontains(pattern, "\\") &&
-        !strcontains(pattern, "\n")
+        pattern == null ? false : (
+          trimspace(pattern) != "" &&
+          !strcontains(pattern, "\"") &&
+          !strcontains(pattern, "\\") &&
+          length(regexall("\\p{Cc}", pattern)) == 0
+        )
       ])
     ])
-    error_message = "Each log_check.exclude_patterns entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a newline: patterns are embedded verbatim in the Cloud Logging filter, where a trailing backslash escapes the closing quote and a whitespace-only pattern silences every log line. Check every app's log_check.exclude_patterns list."
+    error_message = "Each log_check.exclude_patterns entry must be a non-null string, non-empty after trimming, and must not contain a double quote (\"), a backslash (\\) or a control character: patterns are embedded verbatim in the Cloud Logging filter, where a trailing backslash escapes the closing quote, a whitespace-only pattern silences every log line and a raw control character lands verbatim in the API payload and fails opaquely at apply. Check every app's log_check.exclude_patterns list."
   }
 
   validation {

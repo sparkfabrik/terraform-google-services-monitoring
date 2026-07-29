@@ -35,3 +35,13 @@
 - [x] 5.7 Extend the `typesense` variable description: note the toggle assumes a health-signal check (uptime_check or workload_check) is configured for the app, since the lag patterns also match chronic degradation. Keep the preset enumeration in the description (consumer contract).
 - [x] 5.8 Run `make generate-docs`, `make lint`, tfsec; re-verify rendering including the new duplicate-user-pattern case (toggle off, `["x","x"]` renders the duplicate clause verbatim).
 - [x] 5.9 Add a CHANGELOG `### Fixed` bullet for the strengthened `exclude_patterns` validation (backslash, whitespace-only, newline now rejected at plan time).
+
+## 6. Review fixes, round 2
+
+- [x] 6.1 Widen the `exclude_patterns` validation in `variables.tf`: guard `pattern != null` first (so the constant error message surfaces instead of a `trimspace` function error), keep `trimspace(pattern) != ""` and the `"`/`\` rejection, and replace the newline check with a control-character class check (e.g. `length(regexall("[[:cntrl:]]", pattern)) == 0`). Update the error message accordingly.
+- [x] 6.2 Apply the same predicate change to the preset precondition in `typesense.tf` (`null` guard not needed there, the preset is a literal). Prefix the error message with "Module defect:" and extend the comment: variable validation cannot reference locals, so the assertion lives on the resource that interpolates the preset.
+- [x] 6.3 Add bidirectional cross-reference comments: the `variables.tf` validation names the precondition as the preset-side copy of the predicate, and vice versa ("keep both in sync").
+- [x] 6.4 CHANGELOG: delete the `### Fixed` section and fold the final validation rule into the `exclude_patterns` `### Added` bullet ("Patterns that are empty after trimming or contain a double quote, a backslash, or a control character are rejected at plan time."), since `exclude_patterns` itself is still unreleased and one Unreleased block must not state two different rules for the same field.
+- [x] 6.5 Reformat the effective-list ternary in `typesense.tf` so each branch sits on its own line (toggle-off branch visible, survives `terraform fmt`).
+- [x] 6.6 Move the kyverno/opt-in preset-shape rationale from the `typesense_logmatch_exclusion_patterns` comment up onto the `typesense_transient_error_patterns` comment, leaving the effective-list comment to describe the list and the toggle-off pass-through only.
+- [x] 6.7 Run `make generate-docs`, `make lint`, tfsec (image without -it). Re-verify: validation rejects `["a\rb"]`, `["a", null]` (with the constant message), `["  "]`, `["trailing\\"]`; still accepts the preset and the example pattern; toggle-off rendering still byte-identical (spot-check `["x","x"]`).
