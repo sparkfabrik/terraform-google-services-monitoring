@@ -388,14 +388,14 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
   # keep both copies in sync.
   lifecycle {
     precondition {
-      condition = alltrue([
+      condition = length(local.typesense_transient_error_patterns) > 0 && alltrue([
         for pattern in local.typesense_transient_error_patterns :
         trimspace(pattern) != "" &&
         !strcontains(pattern, "\"") &&
         !strcontains(pattern, "\\") &&
         length(regexall("\\p{Cc}", pattern)) == 0
       ])
-      error_message = "Module defect: every local.typesense_transient_error_patterns entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a control character: preset patterns are embedded verbatim in the Cloud Logging filter. No consumer configuration can trip this; report it against the module."
+      error_message = "Module defect: local.typesense_transient_error_patterns must not be empty (an empty preset silently turns exclude_transient_errors into a no-op) and every entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a control character: preset patterns are embedded verbatim in the Cloud Logging filter. No consumer configuration can trip this; report it against the module."
     }
   }
 }
