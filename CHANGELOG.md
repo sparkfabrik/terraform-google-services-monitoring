@@ -11,6 +11,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `exclude_patterns` (optional, default `[]`) on the Typesense `log_check` block: a list of substrings excluded from the log-match alert filter via `AND NOT (jsonPayload.message:"<pattern>" OR textPayload:"<pattern>" ...)`; matching uses the case-insensitive Cloud Logging substring operator. The flood check and the dashboard error-log metric keep counting excluded entries. Patterns that are empty or contain a double quote are rejected at plan time.
+- `exclude_transient_errors` (optional, default `false`) on the Typesense `log_check` block: appends a module-maintained preset of transient raft-recovery patterns (`Peer refresh failed`, `> healthy write lag of`, `> healthy read lag of`) to the effective log-match exclusion list, after the user's `exclude_patterns` and deduplicated against them. The preset applies to the log-match alert only.
 
 ## [0.20.1] - 2026-07-23
 

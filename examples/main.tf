@@ -90,12 +90,16 @@ module "example" {
           # The Cloud Monitoring API only accepts ["OPENED"] on log-match
           # policies; closure notifications are not available for them.
           notification_prompts = ["OPENED"]
-          # Suppress known-transient raft recovery noise (case-insensitive
-          # substring match on jsonPayload.message / textPayload). The flood
-          # check and the dashboard error-log chart still count these entries.
+          # Suppress the module-maintained preset of transient raft recovery
+          # patterns ("Peer refresh failed", "> healthy write lag of",
+          # "> healthy read lag of").
+          exclude_transient_errors = true
+          # Additional project-specific substrings (case-insensitive match on
+          # jsonPayload.message / textPayload), rendered ahead of the preset in
+          # the filter and deduplicated against it. The flood check and the
+          # dashboard error-log chart still count every excluded entry.
           exclude_patterns = [
-            "Peer refresh failed",
-            "> healthy write lag of",
+            "Bad or missing auth key header",
           ]
         }
         flood_check = {

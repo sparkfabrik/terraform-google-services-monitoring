@@ -64,17 +64,41 @@ locals {
     if config.log_check != null && try(config.log_check.enabled, false)
   } : {}
 
+  # Curated, module-maintained exclusion preset for the transient raft
+  # recovery lines Typesense emits after a node is replaced. Deliberately a
+  # constant and not a variable: consumers tune their own noise through
+  # log_check.exclude_patterns, while this list stays in one place so
+  # curation changes reach every consumer on module upgrade. Every entry
+  # honors the invariant the exclude_patterns validation enforces
+  # (non-empty, no double quote), keeping verbatim interpolation safe.
+  typesense_transient_error_patterns = [
+    "Peer refresh failed",
+    "> healthy write lag of",
+    "> healthy read lag of",
+  ]
+
   # Optional exclusion clause for the log-match alert filter: one
   # case-insensitive substring match per pattern, against both structured
   # (jsonPayload.message) and plain-text (textPayload) container logs.
+  # The effective list is the user patterns followed by the transient-error
+  # preset when opted in, deduplicated so a consumer still carrying a preset
+  # entry manually does not churn the filter string.
   # Empty pattern lists render "" so the filter stays byte-identical to
   # the pre-exclusion form (no state churn on upgrade).
-  typesense_logmatch_exclusions = {
+  typesense_logmatch_exclusion_patterns = {
     for app_name, lc in local.typesense_log_checks :
-    app_name => length(lc.exclude_patterns) == 0 ? "" : format(
+    app_name => distinct(concat(
+      lc.exclude_patterns,
+      lc.exclude_transient_errors ? local.typesense_transient_error_patterns : []
+    ))
+  }
+
+  typesense_logmatch_exclusions = {
+    for app_name, patterns in local.typesense_logmatch_exclusion_patterns :
+    app_name => length(patterns) == 0 ? "" : format(
       "\nAND NOT (%s)",
       join(" OR ", [
-        for pattern in lc.exclude_patterns :
+        for pattern in patterns :
         "jsonPayload.message:\"${pattern}\" OR textPayload:\"${pattern}\""
       ])
     )
