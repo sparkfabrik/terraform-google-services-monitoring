@@ -210,7 +210,7 @@ variable "konnectivity_agent" {
 }
 
 variable "typesense" {
-  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix. Notification routing resolves per check: each check block accepts 'notification_enabled' (tri-state, null inherits the service-level setting) and 'notification_channels' (null inherits the service-level list when non-empty, otherwise the root 'notification_channels'); the most specific non-null setting wins. When the effective 'notification_enabled' is false the check's policies are created with no notification channels; an empty override list is legal and also results in no notifications. Each app can additionally enable a per-app Cloud Monitoring dashboard ('dashboard' block): widgets are built only from the checks the app configures, the title defaults to 'Typesense vitals — <app> (cluster=..., namespace=...)' and can be overridden via 'display_name'. Apps with both 'log_check' and the dashboard enabled also get a log-based counter metric for error logs feeding the dashboard's error-log rate chart. 'log_check.exclude_patterns' is a list of substrings excluded from the log-match alert: entries whose 'jsonPayload.message' or 'textPayload' contains any pattern do not fire the alert (Cloud Logging ':' operator, case-insensitive substring match); the flood check and the dashboard error-log metric keep counting excluded entries."
+  description = "Configuration for Typesense monitoring alerts. Supports uptime checks for HTTP endpoints (with optional response content assertion), container-level alerts (pod restarts), log-based alerts and workload vitals (memory, CPU, PVC volume, replica availability) in GKE. Each app is identified by its name (map key). The GKE cluster targeted by Kubernetes-based checks is the app-level 'cluster_name' when set, otherwise the service-level 'cluster_name'. Kubernetes-based checks filter on the app-level 'namespace', required when any of container_check, log_check, flood_check or workload_check is configured. Every duration-like field is a number of seconds carrying a '_seconds' name suffix. Notification routing resolves per check: each check block accepts 'notification_enabled' (tri-state, null inherits the service-level setting) and 'notification_channels' (null inherits the service-level list when non-empty, otherwise the root 'notification_channels'); the most specific non-null setting wins. When the effective 'notification_enabled' is false the check's policies are created with no notification channels; an empty override list is legal and also results in no notifications. Each app can additionally enable a per-app Cloud Monitoring dashboard ('dashboard' block): widgets are built only from the checks the app configures, the title defaults to 'Typesense vitals — <app> (cluster=..., namespace=...)' and can be overridden via 'display_name'. Apps with both 'log_check' and the dashboard enabled also get a log-based counter metric for error logs feeding the dashboard's error-log rate chart. 'log_check.exclude_patterns' is a list of substrings excluded from the log-match alert: entries whose 'jsonPayload.message' or 'textPayload' contains any pattern do not fire the alert (Cloud Logging ':' operator, case-insensitive substring match); the flood check and the dashboard error-log metric keep counting excluded entries. 'log_check.exclude_transient_errors' (default false) additionally appends a module-maintained preset of transient Typesense raft-recovery patterns ('Peer refresh failed', '> healthy write lag of', '> healthy read lag of') to the effective exclusion list, deduplicated and after the user patterns; the preset is not configurable and applies to the log-match alert only. The lag patterns also match chronic degradation, so enable the toggle only for apps that keep a health signal covered by another check ('uptime_check' or 'workload_check'), otherwise a persistent replication failure has nothing left to surface it."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -252,6 +252,7 @@ variable "typesense" {
         logmatch_notification_rate_limit_seconds = optional(number, 300)
         auto_close_seconds                       = optional(number, 3600)
         exclude_patterns                         = optional(list(string), [])
+        exclude_transient_errors                 = optional(bool, false)
         notification_enabled                     = optional(bool, null)
         notification_channels                    = optional(list(string), null)
         notification_prompts                     = optional(list(string), null)
@@ -371,14 +372,26 @@ variable "typesense" {
     error_message = "log_check.notification_prompts only supports [\"OPENED\"]: the Cloud Monitoring API rejects other prompts on log-match alert policies (closure notifications are not available for them)."
   }
 
+  # The same predicate guards the module-maintained preset, through the
+  # precondition on google_monitoring_alert_policy.typesense_logmatch_alert
+  # in typesense.tf; keep both copies in sync. A null entry is rejected by
+  # the conditional and not by a `pattern != null &&` conjunct: HCL does not
+  # short-circuit `&&` on Terraform 1.5 (the module floor), so trimspace()
+  # would still run on the null and mask this message with a function error.
+  # "\\p{Cc}" is the Unicode control class: C0, C1 and DEL.
   validation {
     condition = alltrue([
       for app_name, config in var.typesense.apps : alltrue([
         for pattern in try(config.log_check.exclude_patterns, []) :
-        pattern != "" && !strcontains(pattern, "\"")
+        pattern == null ? false : (
+          trimspace(pattern) != "" &&
+          !strcontains(pattern, "\"") &&
+          !strcontains(pattern, "\\") &&
+          length(regexall("\\p{Cc}", pattern)) == 0
+        )
       ])
     ])
-    error_message = "Each log_check.exclude_patterns entry must be a non-empty string without double quotes (\"): patterns are embedded verbatim in the Cloud Logging filter. Check every app's log_check.exclude_patterns list."
+    error_message = "Each log_check.exclude_patterns entry must be a non-null string, non-empty after trimming, and must not contain a double quote (\"), a backslash (\\) or a control character: patterns are embedded verbatim in the Cloud Logging filter, where a trailing backslash escapes the closing quote, a whitespace-only pattern silences every log line and a raw control character lands verbatim in the API payload and fails opaquely at apply. Check every app's log_check.exclude_patterns list."
   }
 
   validation {
