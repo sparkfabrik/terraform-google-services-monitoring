@@ -23,3 +23,15 @@
 - [x] 4.2 Run `make tfsec`; it must pass.
 - [x] 4.3 Verify byte-identical rendering when the toggle is off: inspect the `typesense_logmatch_exclusions` expression to confirm `exclude_transient_errors = false` (or unset) with empty `exclude_patterns` yields `""` and with non-empty user patterns yields the same clause as before the change.
 - [x] 4.4 Verify the toggle path: with `exclude_transient_errors = true` and no user patterns the clause contains all three preset patterns in order; with an overlapping user pattern the duplicate appears once (deduplicated, first occurrence preserved).
+
+## 5. Review fixes
+
+- [x] 5.1 Gate deduplication on the toggle in `typesense.tf`: effective list is `lc.exclude_transient_errors ? distinct(concat(lc.exclude_patterns, local.typesense_transient_error_patterns)) : lc.exclude_patterns`. Toggle off must render duplicate user patterns verbatim (byte-identical to pre-change).
+- [x] 5.2 Rename the rendered-clause local `typesense_logmatch_exclusions` to `typesense_logmatch_exclusion_clauses` and update its single reference in the logmatch alert resource.
+- [x] 5.3 Split the locals comment: the effective-list sentence stays on `typesense_logmatch_exclusion_patterns`; the rendering semantics (jsonPayload/textPayload, case-insensitive `:`, empty list renders `""` to keep the filter byte-identical) move onto `typesense_logmatch_exclusion_clauses`. Add one line naming kyverno's `noise_exclusions` as the other preset shape and why this one is opt-in.
+- [x] 5.4 Add a plan-time `precondition` (on the logmatch alert resource lifecycle) asserting every preset entry is non-empty after trimming and contains no `"`, `\`, or newline, with a constant error message. Shorten the preset comment to point at it.
+- [x] 5.5 Strengthen the `exclude_patterns` validation in `variables.tf`: reject patterns empty after trimming or containing `"`, `\`, or a newline. Constant error message.
+- [x] 5.6 Fix `examples/main.tf`: reword the toggle comment (it must say the preset log lines are dropped from the alert, not that the preset is suppressed); replace the `"Bad or missing auth key header"` example pattern with a benign noise line (e.g. a client-disconnect message); drop the verbatim preset enumeration from the example comment and point at the `typesense` variable description instead.
+- [x] 5.7 Extend the `typesense` variable description: note the toggle assumes a health-signal check (uptime_check or workload_check) is configured for the app, since the lag patterns also match chronic degradation. Keep the preset enumeration in the description (consumer contract).
+- [x] 5.8 Run `make generate-docs`, `make lint`, tfsec; re-verify rendering including the new duplicate-user-pattern case (toggle off, `["x","x"]` renders the duplicate clause verbatim).
+- [x] 5.9 Add a CHANGELOG `### Fixed` bullet for the strengthened `exclude_patterns` validation (backslash, whitespace-only, newline now rejected at plan time).

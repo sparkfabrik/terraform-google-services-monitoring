@@ -26,7 +26,7 @@ None.
 ## Impact
 
 - `variables.tf`: new `optional(bool, false)` attribute on the `log_check` object; variable description extended.
-- `typesense.tf`: new local holding the preset; `typesense_logmatch_exclusions` builds the clause from the combined (user + preset) list.
+- `typesense.tf`: new local holding the preset; the exclusion-clause locals build the clause from the combined (user + preset) list.
 - `examples/main.tf`: demonstrate the toggle.
 - `README.md`: regenerated terraform-docs block (`make generate-docs`).
 - `CHANGELOG.md`: one bullet under `## [Unreleased]` / `### Added`.

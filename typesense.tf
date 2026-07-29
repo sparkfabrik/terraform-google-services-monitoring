@@ -68,32 +68,40 @@ locals {
   # recovery lines Typesense emits after a node is replaced. Deliberately a
   # constant and not a variable: consumers tune their own noise through
   # log_check.exclude_patterns, while this list stays in one place so
-  # curation changes reach every consumer on module upgrade. Every entry
-  # honors the invariant the exclude_patterns validation enforces
-  # (non-empty, no double quote), keeping verbatim interpolation safe.
+  # curation changes reach every consumer on module upgrade. The entries must
+  # satisfy the same invariant as user patterns; the precondition on
+  # google_monitoring_alert_policy.typesense_logmatch_alert enforces it.
   typesense_transient_error_patterns = [
     "Peer refresh failed",
     "> healthy write lag of",
     "> healthy read lag of",
   ]
 
-  # Optional exclusion clause for the log-match alert filter: one
-  # case-insensitive substring match per pattern, against both structured
-  # (jsonPayload.message) and plain-text (textPayload) container logs.
-  # The effective list is the user patterns followed by the transient-error
-  # preset when opted in, deduplicated so a consumer still carrying a preset
-  # entry manually does not churn the filter string.
-  # Empty pattern lists render "" so the filter stays byte-identical to
-  # the pre-exclusion form (no state churn on upgrade).
+  # Effective exclusion list for the log-match alert filter: the user
+  # patterns, followed by the transient-error preset when opted in and
+  # deduplicated so a consumer still carrying a preset entry manually does
+  # not churn the filter string. With the toggle off the user list passes
+  # through verbatim, duplicates included, so the rendered filter stays
+  # byte-identical to the pre-toggle form. Kyverno's
+  # service_errors_check.noise_exclusions is the other preset shape in this
+  # module, curated as a variable default; this one is opt-in because
+  # changing a default would move the alert boundary for every consumer on
+  # upgrade.
   typesense_logmatch_exclusion_patterns = {
     for app_name, lc in local.typesense_log_checks :
-    app_name => distinct(concat(
+    app_name => lc.exclude_transient_errors ? distinct(concat(
       lc.exclude_patterns,
-      lc.exclude_transient_errors ? local.typesense_transient_error_patterns : []
-    ))
+      local.typesense_transient_error_patterns
+    )) : lc.exclude_patterns
   }
 
-  typesense_logmatch_exclusions = {
+  # Rendered exclusion clause appended to the log-match alert filter: one
+  # case-insensitive substring match per pattern (Cloud Logging ':'
+  # operator), against both structured (jsonPayload.message) and plain-text
+  # (textPayload) container logs. An empty effective list renders "" so the
+  # filter stays byte-identical to the pre-exclusion form (no state churn on
+  # upgrade).
+  typesense_logmatch_exclusion_clauses = {
     for app_name, patterns in local.typesense_logmatch_exclusion_patterns :
     app_name => length(patterns) == 0 ? "" : format(
       "\nAND NOT (%s)",
@@ -346,7 +354,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
         AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
         AND resource.labels.namespace_name="${local.typesense_namespaces[each.key]}"
         AND resource.labels.container_name="typesense"
-        AND severity>="${each.value.min_severity}"${local.typesense_logmatch_exclusions[each.key]}
+        AND severity>="${each.value.min_severity}"${local.typesense_logmatch_exclusion_clauses[each.key]}
       EOT
     }
   }
@@ -367,6 +375,21 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
     notification_prompts = each.value.notification_prompts
     notification_rate_limit {
       period = "${each.value.logmatch_notification_rate_limit_seconds}s"
+    }
+  }
+
+  # The preset is interpolated verbatim into the filter, so a curation
+  # mistake must fail at plan time instead of shipping a malformed filter.
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for pattern in local.typesense_transient_error_patterns :
+        trimspace(pattern) != "" &&
+        !strcontains(pattern, "\"") &&
+        !strcontains(pattern, "\\") &&
+        !strcontains(pattern, "\n")
+      ])
+      error_message = "Every local.typesense_transient_error_patterns entry must be non-empty after trimming and must not contain a double quote (\"), a backslash (\\) or a newline: preset patterns are embedded verbatim in the Cloud Logging filter."
     }
   }
 }
