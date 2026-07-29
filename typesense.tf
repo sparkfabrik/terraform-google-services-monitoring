@@ -64,6 +64,22 @@ locals {
     if config.log_check != null && try(config.log_check.enabled, false)
   } : {}
 
+  # Optional exclusion clause for the log-match alert filter: one
+  # case-insensitive substring match per pattern, against both structured
+  # (jsonPayload.message) and plain-text (textPayload) container logs.
+  # Empty pattern lists render "" so the filter stays byte-identical to
+  # the pre-exclusion form (no state churn on upgrade).
+  typesense_logmatch_exclusions = {
+    for app_name, lc in local.typesense_log_checks :
+    app_name => length(lc.exclude_patterns) == 0 ? "" : format(
+      "\nAND NOT (%s)",
+      join(" OR ", [
+        for pattern in lc.exclude_patterns :
+        "jsonPayload.message:\"${pattern}\" OR textPayload:\"${pattern}\""
+      ])
+    )
+  }
+
   typesense_flood_checks = var.typesense.enabled ? {
     for app_name, config in var.typesense.apps :
     app_name => config.flood_check
@@ -306,7 +322,7 @@ resource "google_monitoring_alert_policy" "typesense_logmatch_alert" {
         AND resource.labels.cluster_name="${local.typesense_cluster_names[each.key]}"
         AND resource.labels.namespace_name="${local.typesense_namespaces[each.key]}"
         AND resource.labels.container_name="typesense"
-        AND severity>="${each.value.min_severity}"
+        AND severity>="${each.value.min_severity}"${local.typesense_logmatch_exclusions[each.key]}
       EOT
     }
   }

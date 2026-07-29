@@ -90,6 +90,13 @@ module "example" {
           # The Cloud Monitoring API only accepts ["OPENED"] on log-match
           # policies; closure notifications are not available for them.
           notification_prompts = ["OPENED"]
+          # Suppress known-transient raft recovery noise (case-insensitive
+          # substring match on jsonPayload.message / textPayload). The flood
+          # check and the dashboard error-log chart still count these entries.
+          exclude_patterns = [
+            "Peer refresh failed",
+            "> healthy write lag of",
+          ]
         }
         flood_check = {
           enabled                      = true
