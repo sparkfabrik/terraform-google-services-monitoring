@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-06
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.21.0...0.22.0)
+
+### Added
+
+- `metrics_check` block on each Typesense app: PromQL alert policies on the scraped exporter metrics (`prometheus.googleapis.com/typesense_*`). `write_queue` (default WARNING 300 / CRITICAL 450 held 600s) on `typesense_stats_pending_write_batches`, `overloaded_requests` (default WARNING at >0 held 600s) on `typesense_stats_overloaded_requests_per_second`, and `search_latency` / `write_latency` (empty by default, per-app SLO) on `typesense_stats_search_latency_ms` / `typesense_stats_write_latency_ms`. Each family is a list of `{severity, threshold, duration_seconds}`; empty the list to disable it. Per-check notification routing matches the other checks. The policies require a GMP PodMonitoring to be scraping the exporter; without it the series are absent and the policies do not fire.
+- `dashboard.metrics_widgets` flag (optional, default `false`): opt-in scraped `typesense_*` widgets on the per-app dashboard (write queue, search/write latency, overloaded requests, jemalloc resident memory), grouped by pod. Off by default, so the extra widgets are not added on every app (for example stage) even when `metrics_check` is set; the base GKE-system, log and uptime widgets are unchanged.
+
 ## [0.21.0] - 2026-07-29
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.20.1...0.21.0)

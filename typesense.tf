@@ -17,6 +17,7 @@ locals {
         log_check       = config.log_check
         flood_check     = config.flood_check
         workload_check  = config.workload_check
+        metrics_check   = config.metrics_check
       } :
       check_name => (
         check == null ? [] : (
@@ -252,6 +253,92 @@ locals {
         }
       } : {}
     ) if wc.replica_availability.enabled
+  ]...)
+
+  # Scraped-metric checks: alerts on the Typesense exporter series
+  # (prometheus.googleapis.com/typesense_*), gated on the service and the
+  # per-app metrics_check.enabled flag.
+  typesense_metrics_checks = var.typesense.enabled ? {
+    for app_name, config in var.typesense.apps :
+    app_name => config.metrics_check
+    if config.metrics_check != null && try(config.metrics_check.enabled, false)
+  } : {}
+
+  # Flattened threshold families for the scraped-metric PromQL policies: one
+  # entry becomes one alert policy. Severity is normalized to uppercase so the
+  # for_each key, display name and policy severity share one canonical value.
+  # Write queue and overloaded are keyed "<app>--<index>"; latency is keyed
+  # "<app>--<search|write>--<index>" and carries the metric name, matching the
+  # flattening the workload families use.
+  typesense_metrics_write_queue = merge([
+    for app_name, mc in local.typesense_metrics_checks : {
+      for i, e in mc.write_queue :
+      "${app_name}--${i}" => {
+        app                   = app_name
+        severity              = upper(e.severity)
+        threshold             = e.threshold
+        duration_seconds      = e.duration_seconds
+        cluster_name          = local.typesense_cluster_names[app_name]
+        namespace             = local.typesense_namespaces[app_name]
+        auto_close_seconds    = mc.auto_close_seconds
+        notification_prompts  = mc.notification_prompts
+        notification_channels = local.typesense_check_notification_channels[app_name].metrics_check
+      }
+    }
+  ]...)
+
+  typesense_metrics_overloaded = merge([
+    for app_name, mc in local.typesense_metrics_checks : {
+      for i, e in mc.overloaded_requests :
+      "${app_name}--${i}" => {
+        app                   = app_name
+        severity              = upper(e.severity)
+        threshold             = e.threshold
+        duration_seconds      = e.duration_seconds
+        cluster_name          = local.typesense_cluster_names[app_name]
+        namespace             = local.typesense_namespaces[app_name]
+        auto_close_seconds    = mc.auto_close_seconds
+        notification_prompts  = mc.notification_prompts
+        notification_channels = local.typesense_check_notification_channels[app_name].metrics_check
+      }
+    }
+  ]...)
+
+  typesense_metrics_latency = merge([
+    for app_name, mc in local.typesense_metrics_checks : merge(
+      {
+        for i, e in mc.search_latency :
+        "${app_name}--search--${i}" => {
+          app                   = app_name
+          kind                  = "search"
+          metric                = "typesense_stats_search_latency_ms"
+          severity              = upper(e.severity)
+          threshold             = e.threshold
+          duration_seconds      = e.duration_seconds
+          cluster_name          = local.typesense_cluster_names[app_name]
+          namespace             = local.typesense_namespaces[app_name]
+          auto_close_seconds    = mc.auto_close_seconds
+          notification_prompts  = mc.notification_prompts
+          notification_channels = local.typesense_check_notification_channels[app_name].metrics_check
+        }
+      },
+      {
+        for i, e in mc.write_latency :
+        "${app_name}--write--${i}" => {
+          app                   = app_name
+          kind                  = "write"
+          metric                = "typesense_stats_write_latency_ms"
+          severity              = upper(e.severity)
+          threshold             = e.threshold
+          duration_seconds      = e.duration_seconds
+          cluster_name          = local.typesense_cluster_names[app_name]
+          namespace             = local.typesense_namespaces[app_name]
+          auto_close_seconds    = mc.auto_close_seconds
+          notification_prompts  = mc.notification_prompts
+          notification_channels = local.typesense_check_notification_channels[app_name].metrics_check
+        }
+      },
+    )
   ]...)
 }
 
@@ -693,6 +780,150 @@ resource "google_monitoring_alert_policy" "typesense_workload_replicas" {
           )
           or on() vector(0)
         ) < ${each.value.min_count}
+      PROMQL
+
+duration = "${each.value.duration_seconds}s"
+}
+}
+
+dynamic "documentation" {
+  for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+  content {
+    content   = documentation.value
+    mime_type = "text/markdown"
+  }
+}
+
+notification_channels = each.value.notification_channels
+
+alert_strategy {
+  auto_close           = "${each.value.auto_close_seconds}s"
+  notification_prompts = each.value.notification_prompts
+}
+}
+
+# Alert: Typesense write queue depth (scraped metric)
+# Fires when pending_write_batches per pod stays above the threshold for the
+# duration. Typesense rejects writes at 500; defaults warn well below and only
+# when sustained. Requires the exporter to be scraped by a GMP PodMonitoring.
+resource "google_monitoring_alert_policy" "typesense_metrics_write_queue" {
+  for_each = local.typesense_metrics_write_queue
+
+  project      = local.typesense_project
+  display_name = "Typesense write queue pending batches > ${each.value.threshold} ${each.value.severity} (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense pending_write_batches > ${each.value.threshold}"
+
+    condition_prometheus_query_language {
+      query = <<-PROMQL
+        max by (pod) (
+          typesense_stats_pending_write_batches{${join(", ", compact([
+      each.value.cluster_name != null ? "cluster=\"${each.value.cluster_name}\"" : "",
+      "namespace=\"${each.value.namespace}\"",
+      "job=\"typesense\"",
+]))}}
+        ) > ${each.value.threshold}
+      PROMQL
+
+duration = "${each.value.duration_seconds}s"
+}
+}
+
+dynamic "documentation" {
+  for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+  content {
+    content   = documentation.value
+    mime_type = "text/markdown"
+  }
+}
+
+notification_channels = each.value.notification_channels
+
+alert_strategy {
+  auto_close           = "${each.value.auto_close_seconds}s"
+  notification_prompts = each.value.notification_prompts
+}
+}
+
+# Alert: Typesense overloaded requests (scraped metric)
+# Fires when overloaded_requests_per_second per pod stays above the threshold
+# for the duration (default: any sustained non-zero rate, at WARNING).
+resource "google_monitoring_alert_policy" "typesense_metrics_overloaded" {
+  for_each = local.typesense_metrics_overloaded
+
+  project      = local.typesense_project
+  display_name = "Typesense overloaded requests/s > ${each.value.threshold} ${each.value.severity} (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense overloaded_requests_per_second > ${each.value.threshold}"
+
+    condition_prometheus_query_language {
+      query = <<-PROMQL
+        max by (pod) (
+          typesense_stats_overloaded_requests_per_second{${join(", ", compact([
+      each.value.cluster_name != null ? "cluster=\"${each.value.cluster_name}\"" : "",
+      "namespace=\"${each.value.namespace}\"",
+      "job=\"typesense\"",
+]))}}
+        ) > ${each.value.threshold}
+      PROMQL
+
+duration = "${each.value.duration_seconds}s"
+}
+}
+
+dynamic "documentation" {
+  for_each = var.typesense.alert_documentation != null ? [var.typesense.alert_documentation] : []
+
+  content {
+    content   = documentation.value
+    mime_type = "text/markdown"
+  }
+}
+
+notification_channels = each.value.notification_channels
+
+alert_strategy {
+  auto_close           = "${each.value.auto_close_seconds}s"
+  notification_prompts = each.value.notification_prompts
+}
+}
+
+# Alert: Typesense search/write latency over SLO (scraped metric)
+# Off by default: entries are created only for the per-app SLO thresholds the
+# consumer sets in metrics_check.search_latency / write_latency. The metric is a
+# point-in-time average gauge, so the alert is "value above threshold sustained
+# for the duration", not a percentile.
+resource "google_monitoring_alert_policy" "typesense_metrics_latency" {
+  for_each = local.typesense_metrics_latency
+
+  project      = local.typesense_project
+  display_name = "Typesense ${each.value.kind} latency > ${each.value.threshold}ms ${each.value.severity} (cluster=${each.value.cluster_name}, namespace=${each.value.namespace}, app=${each.value.app})"
+  combiner     = "OR"
+  severity     = each.value.severity
+  enabled      = true
+
+  conditions {
+    display_name = "Typesense ${each.value.metric} > ${each.value.threshold}ms"
+
+    condition_prometheus_query_language {
+      query = <<-PROMQL
+        max by (pod) (
+          ${each.value.metric}{${join(", ", compact([
+      each.value.cluster_name != null ? "cluster=\"${each.value.cluster_name}\"" : "",
+      "namespace=\"${each.value.namespace}\"",
+      "job=\"typesense\"",
+]))}}
+        ) > ${each.value.threshold}
       PROMQL
 
 duration = "${each.value.duration_seconds}s"
