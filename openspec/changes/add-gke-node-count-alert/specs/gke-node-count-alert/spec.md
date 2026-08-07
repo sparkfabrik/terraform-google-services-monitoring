@@ -8,7 +8,7 @@ Provides a reusable Cloud Monitoring alert that warns when a GKE cluster runs mo
 
 The module SHALL expose a `gke_node_count` input variable and, when enabled, create a `google_monitoring_alert_policy` that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable sustained duration.
 
-The variable SHALL follow the module's per-service convention: `enabled` (bool, default `false`), `project_id` (string, default `null`, falling back to `var.project_id`), `notification_enabled` (bool, default `true`), `notification_channels` (list(string), default `[]`, falling back to `var.notification_channels`), and `user_labels` (map(string), default `{}`). It SHALL also expose alert-specific fields: `cluster_name` (string, required when enabled), `node_pool_name` (string, default `null`), `threshold` (number, default `16`), `duration` (string, default `"86400s"`), `alignment_period` (string, default `"3600s"`), `severity` (string, default `"WARNING"`), and `auto_close` (string, optional).
+The variable SHALL follow the module's per-service convention: `enabled` (bool, default `false`), `project_id` (string, default `null`, falling back to `var.project_id`), `notification_enabled` (bool, default `true`), `notification_channels` (list(string), default `[]`, falling back to `var.notification_channels`), and `user_labels` (map(string), default `{}`). It SHALL also expose alert-specific fields: `cluster_name` (string, required when enabled), `threshold` (number, default `16`), `duration` (string, default `"86400s"`), `alignment_period` (string, default `"60s"`), `severity` (string, default `"WARNING"`), and `auto_close` (string, optional). The alert is total-count only: it does not offer per-pool scoping, because the node pool is not a queryable label on `k8s_node` metric series without kube-state-metrics.
 
 #### Scenario: Alert disabled by default
 
@@ -22,13 +22,13 @@ The variable SHALL follow the module's per-service convention: `enabled` (bool, 
 
 ### Requirement: Total node count across all pools
 
-When `node_pool_name` is unset (`null`), the alert SHALL count the total number of nodes across all node pools of the named cluster, without restriction to any single pool.
+The alert SHALL count the total number of nodes across all node pools of the named cluster, without restriction to any single pool.
 
 The count SHALL be derived by counting the per-node time series of the `k8s_node` resource (one series per node), so that the alerted value equals the number of nodes rather than an aggregate of a per-node metric value.
 
 #### Scenario: Counts every pool
 
-- **WHEN** the cluster has nodes spread across multiple node pools and `node_pool_name` is `null`
+- **WHEN** the cluster has nodes spread across multiple node pools
 - **THEN** the alert condition evaluates the sum of nodes across all pools of that cluster
 
 #### Scenario: Value equals node count
@@ -41,42 +41,19 @@ The count SHALL be derived by counting the per-node time series of the `k8s_node
 - **WHEN** a pool churns nodes (for example spot or preemptible) so that terminated node series still hold recent points
 - **THEN** the aggregation SHALL use an alignment period close to the metric sample interval (default 60s) so `REDUCE_COUNT` counts currently running nodes rather than every node seen within a long window
 
-### Requirement: Optional single node pool scope
+### Requirement: Project and cluster scoping
 
-When `node_pool_name` is set, the alert SHALL restrict the node count to that single node pool of the named cluster.
-
-#### Scenario: Scoped to one pool
-
-- **WHEN** the consumer sets `node_pool_name = "default-pool"`
-- **THEN** the alert counts only nodes belonging to `default-pool` in the named cluster and ignores nodes in other pools
-
-### Requirement: Optional per-pool thresholds
-
-The variable SHALL expose `node_pool_thresholds`, a map of node pool name to threshold. When the map is non-empty, the alert SHALL evaluate each named pool separately against its own threshold, emitting one condition per map entry within a single alert policy combined with OR, so the policy fires when any named pool's node count exceeds its own threshold for `duration`. Each condition's count SHALL be scoped to its pool by matching the node name, which embeds the pool name. Pools not listed in the map SHALL NOT be evaluated. `node_pool_thresholds` and `node_pool_name` SHALL be mutually exclusive, and the top-level `threshold` SHALL be ignored while the map is non-empty.
-
-#### Scenario: Distinct threshold per pool
-
-- **WHEN** the consumer sets `node_pool_thresholds = { "default-pool" = 14, "stable-pool-low" = 4 }`
-- **THEN** the policy contains one condition scoped to `default-pool` firing above 14 and one condition scoped to `stable-pool-low` firing above 4, and no other pool is evaluated
-
-#### Scenario: Any pool over its threshold fires
-
-- **WHEN** `stable-pool-low` holds 5 nodes for `duration` while `default-pool` holds 10
-- **THEN** the policy fires on the `stable-pool-low` condition (5 > 4) even though `default-pool` is under its own threshold (10 < 14)
-
-#### Scenario: Mutually exclusive with node_pool_name
-
-- **WHEN** the consumer sets both `node_pool_thresholds` (non-empty) and `node_pool_name`
-- **THEN** variable validation rejects the configuration
-
-### Requirement: Cluster scoping
-
-The alert SHALL filter by the required `cluster_name` so that only nodes belonging to the named cluster are counted, even when the monitored project contains multiple clusters.
+The alert filter SHALL scope by both the resolved project (`project_id`, falling back to `var.project_id`) and the required `cluster_name`, so that only nodes belonging to the named cluster in that project are counted, even when metrics from other clusters or projects are visible.
 
 #### Scenario: Ignores other clusters
 
 - **WHEN** the project contains two clusters and `cluster_name` names one of them
 - **THEN** nodes of the other cluster do not contribute to the count
+
+#### Scenario: Filter includes project id
+
+- **WHEN** the alert is enabled
+- **THEN** the condition filter contains `resource.labels.project_id` set to the resolved project alongside `resource.labels.cluster_name`
 
 ### Requirement: Notification routing and metadata
 

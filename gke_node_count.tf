@@ -17,87 +17,52 @@ locals {
 
   gke_node_count_cluster_name = var.gke_node_count.cluster_name != null ? var.gke_node_count.cluster_name : ""
 
-  # Per-pool mode: a non-empty node_pool_thresholds map turns the alert into one
-  # condition per named pool, each with its own threshold.
-  gke_node_count_per_pool = length(var.gke_node_count.node_pool_thresholds) > 0
-
-  # Display suffix reflecting the counting mode.
-  gke_node_count_mode_suffix = (
-    local.gke_node_count_per_pool
-    ? ", per node pool"
-    : var.gke_node_count.node_pool_name != null ? ", pool=${var.gke_node_count.node_pool_name}" : ""
-  )
-
-  # Normalized condition list: one entry per policy condition. Per-pool mode
-  # yields one entry per map key (each scoped to its pool with its own
-  # threshold); otherwise a single entry counts the cluster total (optionally
-  # scoped to node_pool_name). Guarded on a non-empty cluster_name so the
-  # entries never carry a null pool clause when the alert is disabled (locals
-  # evaluate regardless of the resource count).
-  gke_node_count_conditions = local.gke_node_count_cluster_name == "" ? {} : (
-    local.gke_node_count_per_pool
-    ? { for pool, threshold in var.gke_node_count.node_pool_thresholds : pool => {
-      pool      = pool
-      threshold = threshold
-    } }
-    : { total = {
-      pool      = var.gke_node_count.node_pool_name
-      threshold = var.gke_node_count.threshold
-    } }
-  )
+  # Count the per-node k8s_node series across all pools of the cluster. Guarded
+  # on a non-empty cluster_name so the local never interpolates a null when the
+  # alert is disabled (locals evaluate regardless of the resource count).
+  gke_node_count_filter = local.gke_node_count_cluster_name == "" ? "" : join("\n", [
+    "resource.type = \"k8s_node\"",
+    "AND resource.labels.project_id = \"${local.gke_node_count_project}\"",
+    "AND resource.labels.cluster_name = \"${local.gke_node_count_cluster_name}\"",
+    "AND metric.type = \"kubernetes.io/node/cpu/allocatable_cores\"",
+  ])
 }
 
-# GKE node count alert. Counts the per-node k8s_node series (REDUCE_COUNT), so the
-# evaluated value equals the number of nodes rather than a per-node metric. With a
-# node_pool_thresholds map, one condition per named pool is emitted, each scoped to
-# its pool and compared against its own threshold (the policy fires if any pool is
-# over its threshold).
+# GKE total node count alert. Counts the per-node k8s_node series (REDUCE_COUNT),
+# so the evaluated value equals the number of nodes rather than a per-node metric.
 resource "google_monitoring_alert_policy" "gke_node_count" {
   count = var.gke_node_count.enabled && var.gke_node_count.cluster_name != null && var.gke_node_count.cluster_name != "" ? 1 : 0
 
   project      = local.gke_node_count_project
-  display_name = "GKE node count sustained high (cluster=${var.gke_node_count.cluster_name}${local.gke_node_count_mode_suffix})"
+  display_name = "GKE total node count sustained high (cluster=${var.gke_node_count.cluster_name})"
   combiner     = "OR"
   severity     = var.gke_node_count.severity
   user_labels  = var.gke_node_count.user_labels
 
-  dynamic "conditions" {
-    for_each = local.gke_node_count_conditions
-    content {
-      display_name = conditions.value.pool != null ? "Node pool '${conditions.value.pool}' node count exceeds ${conditions.value.threshold}" : "Total GKE node count exceeds ${conditions.value.threshold}"
+  conditions {
+    display_name = "Total GKE node count exceeds ${var.gke_node_count.threshold}"
 
-      condition_threshold {
-        # Scope to a pool by matching the node name, which embeds the pool as
-        # "gke-<cluster>-<pool>-<hash>-<id>". The gke-nodepool system metadata
-        # label is not reliably attached to k8s_node metric series, so a
-        # node_name regex is the deterministic way to filter by pool.
-        filter = join("\n", concat([
-          "resource.type = \"k8s_node\"",
-          "AND resource.labels.cluster_name = \"${local.gke_node_count_cluster_name}\"",
-          "AND metric.type = \"kubernetes.io/node/cpu/allocatable_cores\"",
-          ], conditions.value.pool != null ? [
-          "AND resource.labels.node_name = monitoring.regex.full_match(\".*-${conditions.value.pool}-.*\")"
-        ] : []))
-        comparison      = "COMPARISON_GT"
-        threshold_value = conditions.value.threshold
-        duration        = var.gke_node_count.duration
+    condition_threshold {
+      filter          = local.gke_node_count_filter
+      comparison      = "COMPARISON_GT"
+      threshold_value = var.gke_node_count.threshold
+      duration        = var.gke_node_count.duration
 
-        # REDUCE_COUNT tallies the k8s_node series present in each aligned
-        # window, so alignment_period must stay close to the metric's 60s sample
-        # interval. A long window keeps a terminated node's series in range and
-        # overcounts on pools with node churn (spot/preemptible), where the count
-        # would exceed the live node count.
-        aggregations {
-          alignment_period     = var.gke_node_count.alignment_period
-          per_series_aligner   = "ALIGN_MEAN"
-          cross_series_reducer = "REDUCE_COUNT"
-        }
+      # REDUCE_COUNT tallies the k8s_node series present in each aligned window,
+      # so alignment_period must stay close to the metric's 60s sample interval.
+      # A long window keeps a terminated node's series in range and overcounts on
+      # pools with node churn (spot/preemptible), where the count would exceed
+      # the live node count.
+      aggregations {
+        alignment_period     = var.gke_node_count.alignment_period
+        per_series_aligner   = "ALIGN_MEAN"
+        cross_series_reducer = "REDUCE_COUNT"
       }
     }
   }
 
   documentation {
-    content   = "The GKE cluster '${var.gke_node_count.cluster_name}' has had more nodes${local.gke_node_count_per_pool ? " in a monitored node pool" : ""} than the configured threshold for longer than ${var.gke_node_count.duration}. This may indicate unexpected autoscaling that impacts costs. Review node pool sizing and workload demand."
+    content   = "The GKE cluster '${var.gke_node_count.cluster_name}' has had more than ${var.gke_node_count.threshold} nodes for longer than ${var.gke_node_count.duration}. This may indicate unexpected autoscaling that impacts costs. Review node pool sizing and workload demand."
     mime_type = "text/markdown"
   }
 

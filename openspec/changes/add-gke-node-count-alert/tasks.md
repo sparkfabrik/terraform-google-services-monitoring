@@ -16,13 +16,14 @@
 - [x] 3.2 Add an example under `examples/` showing `gke_node_count` enabled (all pools) and a commented `node_pool_name` variant.
 - [x] 3.3 Regenerate `README.md` (`make docs` / terraform-docs) and add a `CHANGELOG.md` entry under `## [Unreleased]` (Added).
 
-## 3b. Module: per-pool thresholds
+## 3b. Module: total-only scope (per-pool dropped)
 
-- [x] 3b.1 Add `node_pool_thresholds` (map(number), default `{}`) to the `gke_node_count` variable, and a validation making it mutually exclusive with `node_pool_name`.
-- [x] 3b.2 Refactor the resource to a `dynamic "conditions"` over a normalized `gke_node_count_conditions` map: per-pool mode (non-empty map) emits one condition per pool scoped by the nodepool label with its own threshold; otherwise a single total/`node_pool_name` condition with `threshold`.
-- [x] 3b.3 Reflect the mode in the policy and condition display names and documentation.
-- [x] 3b.4 Update the example (`node_pool_thresholds` variant), `CHANGELOG.md`, regenerate `README.md`.
-- [x] 3b.5 Scope pools by a `node_name` regex (`monitoring.regex.full_match(".*-<pool>-.*")`) instead of the `cloud.google.com/gke-nodepool` metadata label, which is not attached to `k8s_node` metric series in practice.
+Per-pool alerting was prototyped (`node_pool_thresholds`, `node_pool_name`) but removed: the node pool is not a queryable label on `k8s_node` metric series (metadata label unreachable from PromQL and MQL deprecated; `node_name` truncates the pool; kube-state-metrics is off and bills ingestion). The alert is total-count only.
+
+- [x] 3b.1 Remove `node_pool_name` and `node_pool_thresholds` from the variable and the mutual-exclusion validation; the resource is a single total-count condition.
+- [x] 3b.2 Add `resource.labels.project_id` to the filter (scope by project and cluster).
+- [x] 3b.3 Update variable description, example, `CHANGELOG.md`, spec, and design to total-only; regenerate `README.md`.
+- [ ] 3b.4 Follow-up (separate change): per-pool via kube-state-metrics + `condition_prometheus_query_language`, and a dynamic 14-day-average baseline option.
 
 ## 4. Module: QA and release
 

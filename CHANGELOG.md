@@ -10,13 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with an optional `node_pool_name` filter and a `gke_node_count_alert_policy_name` output.
-- `gke_node_count.node_pool_thresholds` opt-in map (pool name to threshold) that evaluates named node pools separately, each against its own threshold, as one condition per pool in a single policy. Mutually exclusive with `node_pool_name`.
-
-### Changed
-
-- `gke_node_count.alignment_period` default lowered from `3600s` to `60s` so `REDUCE_COUNT` reflects currently running nodes. A long alignment window keeps a terminated node's series in range and overcounts nodes on pools with churn (spot/preemptible).
-- `gke_node_count` pool scoping (both `node_pool_name` and `node_pool_thresholds`) now matches the node name via `monitoring.regex.full_match(".*-<pool>-.*")` instead of the `cloud.google.com/gke-nodepool` metadata label, which is not attached to `k8s_node` metric series in practice.
+- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with a `gke_node_count_alert_policy_name` output. Counts nodes across all pools by counting the `k8s_node` `allocatable_cores` series (`REDUCE_COUNT`); `alignment_period` defaults to `60s` (the metric sample interval) so churned spot/preemptible nodes are not overcounted. The filter is scoped by `project_id` and `cluster_name`. Per-pool scoping is intentionally not offered (the node pool is not a queryable label on `k8s_node` metric series without kube-state-metrics).
 
 ## [0.22.0] - 2026-08-06
 
