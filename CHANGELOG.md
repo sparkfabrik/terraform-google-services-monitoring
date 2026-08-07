@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with a `gke_node_count_alert_policy_name` output.
+
 ## [0.22.0] - 2026-08-06
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.21.0...0.22.0)

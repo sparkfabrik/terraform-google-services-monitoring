@@ -712,3 +712,30 @@ variable "ssl_alert" {
     user_labels           = optional(map(string), {})
   })
 }
+
+variable "gke_node_count" {
+  description = "Configuration for the GKE total node count alert. Fires when a cluster's node count stays above 'threshold' for 'duration'. Counts nodes across all pools of 'cluster_name'; set 'node_pool_name' to restrict the count to a single pool. Requires 'cluster_name' when enabled."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    user_labels           = optional(map(string), {})
+    cluster_name          = optional(string, null)
+    node_pool_name        = optional(string, null)
+    threshold             = optional(number, 16)
+    duration              = optional(string, "86400s")
+    alignment_period      = optional(string, "3600s")
+    severity              = optional(string, "WARNING")
+    auto_close            = optional(string, null)
+  })
+
+  validation {
+    condition = (
+      !var.gke_node_count.enabled ||
+      (var.gke_node_count.cluster_name != null && var.gke_node_count.cluster_name != "")
+    )
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
+}
