@@ -81,6 +81,11 @@ resource "google_monitoring_alert_policy" "gke_node_count" {
         threshold_value = conditions.value.threshold
         duration        = var.gke_node_count.duration
 
+        # REDUCE_COUNT tallies the k8s_node series present in each aligned
+        # window, so alignment_period must stay close to the metric's 60s sample
+        # interval. A long window keeps a terminated node's series in range and
+        # overcounts on pools with node churn (spot/preemptible), where the count
+        # would exceed the live node count.
         aggregations {
           alignment_period     = var.gke_node_count.alignment_period
           per_series_aligner   = "ALIGN_MEAN"

@@ -36,6 +36,11 @@ The count SHALL be derived by counting the per-node time series of the `k8s_node
 - **WHEN** the cluster runs N nodes
 - **THEN** the alert condition's evaluated value equals N (not the sum of a per-node metric such as allocatable cores)
 
+#### Scenario: Count reflects currently running nodes
+
+- **WHEN** a pool churns nodes (for example spot or preemptible) so that terminated node series still hold recent points
+- **THEN** the aggregation SHALL use an alignment period close to the metric sample interval (default 60s) so `REDUCE_COUNT` counts currently running nodes rather than every node seen within a long window
+
 ### Requirement: Optional single node pool scope
 
 When `node_pool_name` is set, the alert SHALL restrict the node count to that single node pool of the named cluster.

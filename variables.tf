@@ -727,7 +727,7 @@ variable "gke_node_count" {
     node_pool_thresholds  = optional(map(number), {})
     threshold             = optional(number, 16)
     duration              = optional(string, "86400s")
-    alignment_period      = optional(string, "3600s")
+    alignment_period      = optional(string, "60s")
     severity              = optional(string, "WARNING")
     auto_close            = optional(string, null)
   })
