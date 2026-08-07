@@ -15,6 +15,8 @@ locals {
     : []
   )
 
+  gke_node_count_cluster_name = var.gke_node_count.cluster_name != null ? var.gke_node_count.cluster_name : ""
+
   # Optional single node pool selector, empty when all pools are counted.
   gke_node_count_pool_filter = (
     var.gke_node_count.node_pool_name != null
@@ -23,13 +25,16 @@ locals {
   )
 
   # Count the per-node k8s_node series; the optional pool clause is left blank
-  # when unset. Monitoring ignores the surrounding whitespace.
-  gke_node_count_filter = <<-EOT
+  # when unset. Monitoring ignores the surrounding whitespace. Guarded on a
+  # non-empty cluster_name so this local never interpolates a null when the
+  # alert is disabled (locals evaluate regardless of the resource count).
+  gke_node_count_filter = local.gke_node_count_cluster_name != "" ? (<<-EOT
     resource.type = "k8s_node"
-    AND resource.labels.cluster_name = "${var.gke_node_count.cluster_name}"
+    AND resource.labels.cluster_name = "${local.gke_node_count_cluster_name}"
     AND metric.type = "kubernetes.io/node/cpu/allocatable_cores"
     ${local.gke_node_count_pool_filter}
   EOT
+  ) : ""
 }
 
 # GKE total node count alert. Counts the per-node k8s_node series (REDUCE_COUNT),
