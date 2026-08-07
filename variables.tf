@@ -480,6 +480,17 @@ variable "typesense" {
                 config.workload_check.volume_utilization
               ) : [entry.alignment_period_seconds, entry.duration_seconds]
             ])
+          ) : [],
+          config.metrics_check != null ? concat(
+            [config.metrics_check.auto_close_seconds],
+            flatten([
+              for entry in concat(
+                config.metrics_check.write_queue,
+                config.metrics_check.overloaded_requests,
+                config.metrics_check.search_latency,
+                config.metrics_check.write_latency
+              ) : [entry.duration_seconds]
+            ])
           ) : []
         ) : value > 0
       ])
@@ -509,6 +520,38 @@ variable "typesense" {
       )
     ])
     error_message = "Each workload_check threshold entry must use a 'severity' of 'WARNING', 'ERROR' or 'CRITICAL' (any casing; normalized to uppercase by the module)."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.metrics_check == null ? true : alltrue([
+          for entry in concat(
+            config.metrics_check.write_queue,
+            config.metrics_check.overloaded_requests,
+            config.metrics_check.search_latency,
+            config.metrics_check.write_latency
+          ) : contains(["WARNING", "ERROR", "CRITICAL"], upper(entry.severity))
+        ])
+      )
+    ])
+    error_message = "Each metrics_check threshold entry (write_queue, overloaded_requests, search_latency, write_latency) must use a 'severity' of 'WARNING', 'ERROR' or 'CRITICAL' (any casing; normalized to uppercase by the module)."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.metrics_check == null ? true : alltrue([
+          for entry in concat(
+            config.metrics_check.write_queue,
+            config.metrics_check.overloaded_requests,
+            config.metrics_check.search_latency,
+            config.metrics_check.write_latency
+          ) : entry.threshold >= 0
+        ])
+      )
+    ])
+    error_message = "Each metrics_check threshold (write_queue, overloaded_requests, search_latency, write_latency) must be >= 0: a negative threshold renders a PromQL comparison that fires permanently."
   }
 
   validation {
