@@ -16,6 +16,13 @@
 - [x] 3.2 Add an example under `examples/` showing `gke_node_count` enabled (all pools) and a commented `node_pool_name` variant.
 - [x] 3.3 Regenerate `README.md` (`make docs` / terraform-docs) and add a `CHANGELOG.md` entry under `## [Unreleased]` (Added).
 
+## 3b. Module: per-pool thresholds
+
+- [x] 3b.1 Add `node_pool_thresholds` (map(number), default `{}`) to the `gke_node_count` variable, and a validation making it mutually exclusive with `node_pool_name`.
+- [x] 3b.2 Refactor the resource to a `dynamic "conditions"` over a normalized `gke_node_count_conditions` map: per-pool mode (non-empty map) emits one condition per pool scoped by the nodepool label with its own threshold; otherwise a single total/`node_pool_name` condition with `threshold`.
+- [x] 3b.3 Reflect the mode in the policy and condition display names and documentation.
+- [x] 3b.4 Update the example (`node_pool_thresholds` variant), `CHANGELOG.md`, regenerate `README.md`.
+
 ## 4. Module: QA and release
 
 - [x] 4.1 Run `terraform fmt`, `tflint`, `terraform validate` (module `make` QA targets).

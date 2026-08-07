@@ -714,7 +714,7 @@ variable "ssl_alert" {
 }
 
 variable "gke_node_count" {
-  description = "Configuration for the GKE total node count alert. Fires when a cluster's node count stays above 'threshold' for 'duration'. Counts nodes across all pools of 'cluster_name'; set 'node_pool_name' to restrict the count to a single pool. Requires 'cluster_name' when enabled."
+  description = "Configuration for the GKE node count alert. Fires when a cluster's node count stays above a threshold for 'duration'. By default counts nodes across all pools of 'cluster_name' against 'threshold'; set 'node_pool_name' to restrict the count to a single pool, or set 'node_pool_thresholds' (a map of pool name to threshold) to evaluate named pools separately, each against its own threshold, as one condition per pool in a single policy. Requires 'cluster_name' when enabled."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -724,6 +724,7 @@ variable "gke_node_count" {
     user_labels           = optional(map(string), {})
     cluster_name          = optional(string, null)
     node_pool_name        = optional(string, null)
+    node_pool_thresholds  = optional(map(number), {})
     threshold             = optional(number, 16)
     duration              = optional(string, "86400s")
     alignment_period      = optional(string, "3600s")
@@ -737,5 +738,10 @@ variable "gke_node_count" {
       (var.gke_node_count.cluster_name != null && var.gke_node_count.cluster_name != "")
     )
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
+
+  validation {
+    condition     = !(length(var.gke_node_count.node_pool_thresholds) > 0 && var.gke_node_count.node_pool_name != null)
+    error_message = "'node_pool_thresholds' and 'node_pool_name' are mutually exclusive: 'node_pool_name' scopes the total count to one pool, 'node_pool_thresholds' evaluates named pools each against its own threshold."
   }
 }

@@ -10,7 +10,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with a `gke_node_count_alert_policy_name` output.
+- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with an optional `node_pool_name` filter and a `gke_node_count_alert_policy_name` output.
+- `gke_node_count.node_pool_thresholds` opt-in map (pool name to threshold) that evaluates named node pools separately, each against its own threshold, as one condition per pool in a single policy. Mutually exclusive with `node_pool_name`.
 
 ## [0.22.0] - 2026-08-06
 
