@@ -118,8 +118,16 @@ module "example" {
         workload_check = {
           expected_replicas = 3
         }
+        # Scraped-metric alerts on the Typesense exporter. Requires a GMP
+        # PodMonitoring feeding prometheus.googleapis.com/typesense_*; without it
+        # the series are absent and the policies never fire. Defaults: write queue
+        # WARNING 300 / CRITICAL 450 held 600s, overloaded WARNING at >0 held 600s;
+        # the latency families stay off until a per-app SLO is set.
+        metrics_check = {}
         # Per-app dashboard with the default title
         # ("Typesense vitals — typesense-app (cluster=test-cluster, namespace=typesense)").
+        # Base widgets only: the scraped typesense_* widgets stay off because
+        # metrics_widgets defaults to false, even though metrics_check is set.
         dashboard = {}
       }
       # Second app on another GKE cluster (per-app override of the service-level
@@ -157,8 +165,22 @@ module "example" {
           # list; sibling checks keep the service-level routing.
           notification_channels = ["low-urgency-channel"]
         }
+        # Scraped-metric alerts with tuned thresholds: a single looser write-queue
+        # policy, the overloaded family disabled, and a search-latency SLO enabled.
+        metrics_check = {
+          write_queue = [
+            { severity = "critical", threshold = 480, duration_seconds = 300 }
+          ]
+          overloaded_requests = [] # family disabled
+          search_latency = [
+            { threshold = 200 }
+          ]
+        }
+        # Opt in to the scraped typesense_* widgets (write queue, latency,
+        # overloaded, jemalloc memory) with metrics_widgets.
         dashboard = {
-          display_name = "Search vitals (staging)"
+          display_name    = "Search vitals (staging)"
+          metrics_widgets = true
         }
       }
     }

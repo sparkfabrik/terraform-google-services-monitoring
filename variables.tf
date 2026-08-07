@@ -333,12 +333,68 @@ variable "typesense" {
         notification_channels = optional(list(string), null)
       }), null)
 
-      # Per-app Cloud Monitoring dashboard built from the metrics the module
-      # already wires (GKE system metrics, log-based metrics, uptime checks).
-      # Widgets render only for the checks the app configures.
+      # Application vitals from the Typesense Prometheus exporter, scraped into
+      # Cloud Monitoring by a GMP PodMonitoring delivered out of band (Sveltos).
+      # Requires that PodMonitoring: without it these series are absent and the
+      # policies never fire (they also never error). Each family is a list of
+      # {severity, threshold, duration_seconds}; empty the list to disable that
+      # family, add entries to add policies. Defaults are deliberately loose and
+      # sustained over a long window to avoid false positives on transient
+      # spikes (e.g. bulk imports); tune per app once real traffic is observed.
+      # PromQL is 'max by (pod) (<metric>{cluster,namespace,job="typesense"}) >
+      # threshold' held for duration_seconds.
+      metrics_check = optional(object({
+        enabled = optional(bool, true)
+        # Write queue depth (typesense_stats_pending_write_batches). Typesense
+        # rejects writes at 500; defaults warn well below and only when sustained.
+        write_queue = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = optional(number, 300)
+          duration_seconds = optional(number, 600)
+          })), [
+          { severity = "WARNING", threshold = 300 },
+          { severity = "CRITICAL", threshold = 450 },
+        ])
+        # Requests rejected because the node is overloaded
+        # (typesense_stats_overloaded_requests_per_second). Any sustained
+        # non-zero rate is real; kept WARNING to avoid paging on brief spikes.
+        overloaded_requests = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = optional(number, 0)
+          duration_seconds = optional(number, 600)
+          })), [
+          { severity = "WARNING", threshold = 0 },
+        ])
+        # Sustained search / write latency over a per-app SLO
+        # (typesense_stats_search_latency_ms / _write_latency_ms). Off by default:
+        # the threshold is per app and must be set from observed traffic. These
+        # are gauges (point-in-time average), not percentiles.
+        search_latency = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = number
+          duration_seconds = optional(number, 300)
+        })), [])
+        write_latency = optional(list(object({
+          severity         = optional(string, "WARNING")
+          threshold        = number
+          duration_seconds = optional(number, 300)
+        })), [])
+        auto_close_seconds    = optional(number, 3600)
+        notification_prompts  = optional(list(string), null)
+        notification_enabled  = optional(bool, null)
+        notification_channels = optional(list(string), null)
+      }), null)
+
+      # Per-app Cloud Monitoring dashboard. Widgets render for the checks the app
+      # configures: GKE system metrics, log-based metrics, uptime checks. The
+      # scraped typesense_* vitals widgets (write queue, search/write latency,
+      # overloaded requests, jemalloc memory) are opt-in: they render only when
+      # metrics_check is set AND 'metrics_widgets' is true. Default off, because
+      # the extra widgets are not wanted on every app (e.g. stage).
       dashboard = optional(object({
-        enabled      = optional(bool, true)
-        display_name = optional(string, null)
+        enabled         = optional(bool, true)
+        display_name    = optional(string, null)
+        metrics_widgets = optional(bool, false)
       }), null)
     })), {})
   })
@@ -356,11 +412,11 @@ variable "typesense" {
   validation {
     condition = alltrue([
       for app_name, config in var.typesense.apps : (
-        (config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null) ||
+        (config.container_check == null && config.log_check == null && config.flood_check == null && config.workload_check == null && config.metrics_check == null) ||
         try(trimspace(config.namespace), "") != ""
       )
     ])
-    error_message = "Each app with container_check, log_check, flood_check or workload_check configured must set a non-empty app-level 'namespace'."
+    error_message = "Each app with container_check, log_check, flood_check, workload_check or metrics_check configured must set a non-empty app-level 'namespace'."
   }
 
   validation {
@@ -424,6 +480,17 @@ variable "typesense" {
                 config.workload_check.volume_utilization
               ) : [entry.alignment_period_seconds, entry.duration_seconds]
             ])
+          ) : [],
+          config.metrics_check != null ? concat(
+            [config.metrics_check.auto_close_seconds],
+            flatten([
+              for entry in concat(
+                config.metrics_check.write_queue,
+                config.metrics_check.overloaded_requests,
+                config.metrics_check.search_latency,
+                config.metrics_check.write_latency
+              ) : [entry.duration_seconds]
+            ])
           ) : []
         ) : value > 0
       ])
@@ -453,6 +520,38 @@ variable "typesense" {
       )
     ])
     error_message = "Each workload_check threshold entry must use a 'severity' of 'WARNING', 'ERROR' or 'CRITICAL' (any casing; normalized to uppercase by the module)."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.metrics_check == null ? true : alltrue([
+          for entry in concat(
+            config.metrics_check.write_queue,
+            config.metrics_check.overloaded_requests,
+            config.metrics_check.search_latency,
+            config.metrics_check.write_latency
+          ) : contains(["WARNING", "ERROR", "CRITICAL"], upper(entry.severity))
+        ])
+      )
+    ])
+    error_message = "Each metrics_check threshold entry (write_queue, overloaded_requests, search_latency, write_latency) must use a 'severity' of 'WARNING', 'ERROR' or 'CRITICAL' (any casing; normalized to uppercase by the module)."
+  }
+
+  validation {
+    condition = alltrue([
+      for app_name, config in var.typesense.apps : (
+        config.metrics_check == null ? true : alltrue([
+          for entry in concat(
+            config.metrics_check.write_queue,
+            config.metrics_check.overloaded_requests,
+            config.metrics_check.search_latency,
+            config.metrics_check.write_latency
+          ) : entry.threshold >= 0
+        ])
+      )
+    ])
+    error_message = "Each metrics_check threshold (write_queue, overloaded_requests, search_latency, write_latency) must be >= 0: a negative threshold renders a PromQL comparison that fires permanently."
   }
 
   validation {

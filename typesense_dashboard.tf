@@ -35,6 +35,9 @@ locals {
       log       = config.log_check != null && try(config.log_check.enabled, false)
       flood     = config.flood_check != null && try(config.flood_check.enabled, false)
       workload  = config.workload_check != null && try(config.workload_check.enabled, false)
+      # Scraped typesense_* widgets are opt-in: metrics_check present and enabled,
+      # AND the dashboard's metrics_widgets flag on (default off).
+      metrics = config.metrics_check != null && try(config.metrics_check.enabled, false) && try(config.dashboard.metrics_widgets, false)
     }
   }
 
@@ -82,6 +85,13 @@ locals {
         "resource.labels.cluster_name=\"${try(coalesce(local.typesense_cluster_names[app_name]), "")}\"",
         "resource.labels.namespace_name=\"${try(coalesce(local.typesense_namespaces[app_name]), "")}\"",
       ])
+      # PromQL label matcher for the scraped exporter metrics (prometheus_target
+      # resource). 'job' is the PodMonitoring name; cluster is dropped when unset.
+      metrics_promql_filter = join(", ", compact([
+        local.typesense_cluster_names[app_name] != null ? "cluster=\"${local.typesense_cluster_names[app_name]}\"" : "",
+        local.typesense_namespaces[app_name] != null ? "namespace=\"${local.typesense_namespaces[app_name]}\"" : "",
+        "job=\"typesense\"",
+      ]))
     }
   }
 
@@ -278,6 +288,67 @@ locals {
           yAxis = { label = "ms", scale = "LINEAR" }
         }
       }
+
+      write_queue_chart = {
+        title = "Write queue (pending batches) per pod"
+        xyChart = {
+          dataSets = [{
+            plotType   = "LINE"
+            targetAxis = "Y1"
+            timeSeriesQuery = {
+              prometheusQuery = "max by (pod) (typesense_stats_pending_write_batches{${s.metrics_promql_filter}})"
+            }
+          }]
+          yAxis = { label = "batches", scale = "LINEAR" }
+        }
+      }
+
+      metrics_latency_chart = {
+        title = "Search / write latency per pod (ms)"
+        xyChart = {
+          dataSets = [
+            {
+              plotType        = "LINE"
+              targetAxis      = "Y1"
+              timeSeriesQuery = { prometheusQuery = "max by (pod) (typesense_stats_search_latency_ms{${s.metrics_promql_filter}})" }
+            },
+            {
+              plotType        = "LINE"
+              targetAxis      = "Y1"
+              timeSeriesQuery = { prometheusQuery = "max by (pod) (typesense_stats_write_latency_ms{${s.metrics_promql_filter}})" }
+            },
+          ]
+          yAxis = { label = "ms", scale = "LINEAR" }
+        }
+      }
+
+      overloaded_chart = {
+        title = "Overloaded requests/s per pod"
+        xyChart = {
+          dataSets = [{
+            plotType   = "LINE"
+            targetAxis = "Y1"
+            timeSeriesQuery = {
+              prometheusQuery = "max by (pod) (typesense_stats_overloaded_requests_per_second{${s.metrics_promql_filter}})"
+            }
+          }]
+          yAxis = { label = "req/s", scale = "LINEAR" }
+        }
+      }
+
+      jemalloc_memory_chart = {
+        title = "jemalloc resident memory per pod"
+        xyChart = {
+          dataSets = [{
+            plotType   = "LINE"
+            targetAxis = "Y1"
+            timeSeriesQuery = {
+              prometheusQuery = "max by (pod) (typesense_metrics_memory_resident_bytes{${s.metrics_promql_filter}})"
+            }
+          }]
+          yAxis = { label = "bytes", scale = "LINEAR" }
+        }
+      }
     }
   }
 
@@ -303,6 +374,8 @@ locals {
           [for widget in [w.error_log_chart] : { width = 24, height = 16, widget = widget } if local.typesense_dashboard_checks[app_name].log],
         ),
         [for widget in [w.latency_chart] : { width = 24, height = 16, widget = widget } if local.typesense_dashboard_checks[app_name].uptime],
+        [for widget in [w.write_queue_chart, w.overloaded_chart] : { width = 24, height = 16, widget = widget } if local.typesense_dashboard_checks[app_name].metrics],
+        [for widget in [w.metrics_latency_chart, w.jemalloc_memory_chart] : { width = 24, height = 16, widget = widget } if local.typesense_dashboard_checks[app_name].metrics],
       ] : row if length(row) > 0
     ]
   }
