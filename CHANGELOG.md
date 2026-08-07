@@ -16,6 +16,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - `gke_node_count.alignment_period` default lowered from `3600s` to `60s` so `REDUCE_COUNT` reflects currently running nodes. A long alignment window keeps a terminated node's series in range and overcounts nodes on pools with churn (spot/preemptible).
+- `gke_node_count` pool scoping (both `node_pool_name` and `node_pool_thresholds`) now matches the node name via `monitoring.regex.full_match(".*-<pool>-.*")` instead of the `cloud.google.com/gke-nodepool` metadata label, which is not attached to `k8s_node` metric series in practice.
 
 ## [0.22.0] - 2026-08-06
 

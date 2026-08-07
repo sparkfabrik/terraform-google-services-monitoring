@@ -33,13 +33,13 @@ AND resource.labels.cluster_name = "<cluster_name>"
 AND metric.type = "kubernetes.io/node/cpu/allocatable_cores"
 ```
 
-When `node_pool_name != null`, append the node-pool selector. The `k8s_node` monitored resource does not carry the pool as a resource label, so pool scoping uses the system metadata label:
+When scoping to a pool (`node_pool_name`, or a `node_pool_thresholds` entry), append a node-pool selector. The `k8s_node` monitored resource does not carry the pool as a resource label, and the `cloud.google.com/gke-nodepool` system metadata label is not reliably attached to `k8s_node` metric series (confirmed absent on this cluster's `allocatable_cores` series). The pool name is embedded in `node_name` (`gke-<cluster>-<pool>-<hash>-<id>`), so scope by a node_name regex instead:
 
 ```
-AND metadata.system_labels."cloud.google.com/gke-nodepool" = "<node_pool_name>"
+AND resource.labels.node_name = monitoring.regex.full_match(".*-<pool>-.*")
 ```
 
-Metadata-label filtering requires the project to have system metadata enabled (default on GKE). This is the documented mechanism for pool-level filtering on `k8s_node`.
+This is deterministic and needs no metadata dependency. Pool names are DNS-style (`[a-z0-9-]`), so no regex escaping is required, and the surrounding hyphens prevent one pool name matching another.
 
 **File layout.** New `gke_node_count.tf` (locals + resource), `gke_node_count` variable appended to `variables.tf`, `gke_node_count_alert_policy_name` output in `outputs.tf`, an `examples/gke-node-count/` (or an added block in the existing generic example), regenerated `README.md` via terraform-docs, `CHANGELOG.md` entry.
 
@@ -47,7 +47,8 @@ Metadata-label filtering requires the project to have system metadata enabled (d
 
 ## Risks / Trade-offs
 
-- **Node-pool metadata filter feasibility.** If `metadata.system_labels."cloud.google.com/gke-nodepool"` is not accepted in a metric-threshold filter for a given project, `node_pool_name` scoping fails while the default all-pools path (no pool filter, the primary requirement) still works. Validate with a real `terraform plan` / test-apply during implementation; if unsupported, document `node_pool_name` as best-effort or drop it.
+- **Node name format dependency.** Pool scoping relies on GKE naming nodes `gke-<cluster>-<pool>-<hash>-<id>`. This is stable GKE behavior, but a future naming change would break the regex. The all-pools total path (no pool filter) is unaffected. The earlier `metadata.system_labels."cloud.google.com/gke-nodepool"` approach was dropped because that label is not attached to `k8s_node` metric series in practice.
+- **Churn overcount.** `REDUCE_COUNT` counts every node series present in the alignment window, so a long `alignment_period` counts terminated spot/preemptible nodes and overcounts. Default is `60s` (the metric sample interval) so the count tracks live nodes; consumers can raise it to smooth sampling jitter at the cost of some ghosting.
 - **Recreate on rewire.** The consumer's existing policy is destroyed and recreated. Harmless for a stateless alert, but note it in the `zambon-ops` MR so reviewers expect the diff.
 - **Single-threshold limitation.** No CRITICAL/WARNING ladder yet. Acceptable per the issue's estimate; the variable can grow into a list later without breaking the simple case if introduced as an additional optional field.
 - **Threshold defaults.** Default `16` and the "max 22 nodes" note are `zambon-ops`-specific; other consumers must set their own `threshold`. The default is a sane starting point, not a universal truth.

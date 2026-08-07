@@ -17,9 +17,6 @@ locals {
 
   gke_node_count_cluster_name = var.gke_node_count.cluster_name != null ? var.gke_node_count.cluster_name : ""
 
-  # The k8s_node system metadata label carrying the node pool name.
-  gke_node_count_nodepool_label = "metadata.system_labels.\"cloud.google.com/gke-nodepool\""
-
   # Per-pool mode: a non-empty node_pool_thresholds map turns the alert into one
   # condition per named pool, each with its own threshold.
   gke_node_count_per_pool = length(var.gke_node_count.node_pool_thresholds) > 0
@@ -70,12 +67,16 @@ resource "google_monitoring_alert_policy" "gke_node_count" {
       display_name = conditions.value.pool != null ? "Node pool '${conditions.value.pool}' node count exceeds ${conditions.value.threshold}" : "Total GKE node count exceeds ${conditions.value.threshold}"
 
       condition_threshold {
+        # Scope to a pool by matching the node name, which embeds the pool as
+        # "gke-<cluster>-<pool>-<hash>-<id>". The gke-nodepool system metadata
+        # label is not reliably attached to k8s_node metric series, so a
+        # node_name regex is the deterministic way to filter by pool.
         filter = join("\n", concat([
           "resource.type = \"k8s_node\"",
           "AND resource.labels.cluster_name = \"${local.gke_node_count_cluster_name}\"",
           "AND metric.type = \"kubernetes.io/node/cpu/allocatable_cores\"",
           ], conditions.value.pool != null ? [
-          "AND ${local.gke_node_count_nodepool_label} = \"${conditions.value.pool}\""
+          "AND resource.labels.node_name = monitoring.regex.full_match(\".*-${conditions.value.pool}-.*\")"
         ] : []))
         comparison      = "COMPARISON_GT"
         threshold_value = conditions.value.threshold

@@ -52,7 +52,7 @@ When `node_pool_name` is set, the alert SHALL restrict the node count to that si
 
 ### Requirement: Optional per-pool thresholds
 
-The variable SHALL expose `node_pool_thresholds`, a map of node pool name to threshold. When the map is non-empty, the alert SHALL evaluate each named pool separately against its own threshold, emitting one condition per map entry within a single alert policy combined with OR, so the policy fires when any named pool's node count exceeds its own threshold for `duration`. Each condition's count SHALL be scoped to its pool via the node pool system metadata label. Pools not listed in the map SHALL NOT be evaluated. `node_pool_thresholds` and `node_pool_name` SHALL be mutually exclusive, and the top-level `threshold` SHALL be ignored while the map is non-empty.
+The variable SHALL expose `node_pool_thresholds`, a map of node pool name to threshold. When the map is non-empty, the alert SHALL evaluate each named pool separately against its own threshold, emitting one condition per map entry within a single alert policy combined with OR, so the policy fires when any named pool's node count exceeds its own threshold for `duration`. Each condition's count SHALL be scoped to its pool by matching the node name, which embeds the pool name. Pools not listed in the map SHALL NOT be evaluated. `node_pool_thresholds` and `node_pool_name` SHALL be mutually exclusive, and the top-level `threshold` SHALL be ignored while the map is non-empty.
 
 #### Scenario: Distinct threshold per pool
 

@@ -22,6 +22,7 @@
 - [x] 3b.2 Refactor the resource to a `dynamic "conditions"` over a normalized `gke_node_count_conditions` map: per-pool mode (non-empty map) emits one condition per pool scoped by the nodepool label with its own threshold; otherwise a single total/`node_pool_name` condition with `threshold`.
 - [x] 3b.3 Reflect the mode in the policy and condition display names and documentation.
 - [x] 3b.4 Update the example (`node_pool_thresholds` variant), `CHANGELOG.md`, regenerate `README.md`.
+- [x] 3b.5 Scope pools by a `node_name` regex (`monitoring.regex.full_match(".*-<pool>-.*")`) instead of the `cloud.google.com/gke-nodepool` metadata label, which is not attached to `k8s_node` metric series in practice.
 
 ## 4. Module: QA and release
 
