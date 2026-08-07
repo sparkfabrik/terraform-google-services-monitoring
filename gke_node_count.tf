@@ -15,12 +15,21 @@ locals {
     : []
   )
 
-  # Optional single node pool selector, appended to the base filter when set.
+  # Optional single node pool selector, empty when all pools are counted.
   gke_node_count_pool_filter = (
     var.gke_node_count.node_pool_name != null
-    ? "\n        AND metadata.system_labels.\"cloud.google.com/gke-nodepool\" = \"${var.gke_node_count.node_pool_name}\""
+    ? "AND metadata.system_labels.\"cloud.google.com/gke-nodepool\" = \"${var.gke_node_count.node_pool_name}\""
     : ""
   )
+
+  # Count the per-node k8s_node series; the optional pool clause is left blank
+  # when unset. Monitoring ignores the surrounding whitespace.
+  gke_node_count_filter = <<-EOT
+    resource.type = "k8s_node"
+    AND resource.labels.cluster_name = "${var.gke_node_count.cluster_name}"
+    AND metric.type = "kubernetes.io/node/cpu/allocatable_cores"
+    ${local.gke_node_count_pool_filter}
+  EOT
 }
 
 # GKE total node count alert. Counts the per-node k8s_node series (REDUCE_COUNT),
@@ -38,11 +47,7 @@ resource "google_monitoring_alert_policy" "gke_node_count" {
     display_name = "Total GKE node count exceeds ${var.gke_node_count.threshold}"
 
     condition_threshold {
-      filter          = <<-EOT
-        resource.type = "k8s_node"
-        AND resource.labels.cluster_name = "${var.gke_node_count.cluster_name}"
-        AND metric.type = "kubernetes.io/node/cpu/allocatable_cores"${local.gke_node_count_pool_filter}
-      EOT
+      filter          = local.gke_node_count_filter
       comparison      = "COMPARISON_GT"
       threshold_value = var.gke_node_count.threshold
       duration        = var.gke_node_count.duration
