@@ -712,3 +712,29 @@ variable "ssl_alert" {
     user_labels           = optional(map(string), {})
   })
 }
+
+variable "gke_node_count" {
+  description = "Configuration for the GKE total node count alert. Fires when the cluster's total node count (across all pools of 'cluster_name') stays above 'threshold' for 'duration'. Requires 'cluster_name' when enabled. Per-pool scoping is intentionally not supported: on GKE the node pool is not a queryable label on k8s_node metric series (node names truncate the pool, and kube-state-metrics is off), so a reliable per-pool count would require enabling kube-state-metrics and a PromQL condition."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    user_labels           = optional(map(string), {})
+    cluster_name          = optional(string, null)
+    threshold             = optional(number, 16)
+    duration              = optional(string, "86400s")
+    alignment_period      = optional(string, "60s")
+    severity              = optional(string, "WARNING")
+    auto_close            = optional(string, null)
+  })
+
+  validation {
+    condition = (
+      !var.gke_node_count.enabled ||
+      (var.gke_node_count.cluster_name != null && var.gke_node_count.cluster_name != "")
+    )
+    error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
+  }
+}

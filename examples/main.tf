@@ -186,6 +186,14 @@ module "example" {
     }
   }
 
+  # GKE total node count alert: warn when the cluster runs more than 'threshold'
+  # nodes for 'duration' (default 24h). Counts every node pool of the cluster.
+  gke_node_count = {
+    enabled      = true
+    cluster_name = "test-cluster"
+    threshold    = 16
+  }
+
   litellm = {
     cluster_name = "test-cluster"
     apps = {

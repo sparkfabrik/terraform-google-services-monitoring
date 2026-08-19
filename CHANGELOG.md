@@ -6,7 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.23.0] - 2026-08-19
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.22.0...0.23.0)
+
+### Added
+
+- `gke_node_count` alert that fires when a GKE cluster's total node count exceeds a configurable threshold for a configurable duration (default 24h), with a `gke_node_count_alert_policy_name` output. Counts nodes across all pools by counting the `k8s_node` `allocatable_cores` series (`REDUCE_COUNT`); `alignment_period` defaults to `60s` (the metric sample interval) so churned spot/preemptible nodes are not overcounted. The filter is scoped by `project_id` and `cluster_name`. Per-pool scoping is intentionally not offered (the node pool is not a queryable label on `k8s_node` metric series without kube-state-metrics).
 
 ## [0.22.0] - 2026-08-06
 
