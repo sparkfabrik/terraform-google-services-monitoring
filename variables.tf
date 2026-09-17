@@ -858,23 +858,24 @@ variable "vertex_ai" {
     alerts = optional(object({
       cost = optional(object({
         enabled = optional(bool, true)
-        # Merged on top of the thresholds the module ships, so adding one does
-        # not discard them. Reuse a module key to replace that threshold, or set
-        # it to { enabled = false } to switch it off.
-        # Every field defaults to null so an unset field means "inherit", never
-        # "reset to the schema default": overriding one field of a module
-        # threshold leaves its other fields alone.
+        # Always declared by the consumer. A monetary amount is a budget, and
+        # only the project that owns the spend knows it: unlike a utilisation
+        # ratio it does not transfer between projects, so the module ships none
+        # and no cost alert exists until one is declared here. Each entry becomes
+        # its own alert policy, so a warning and a critical raise distinguishable
+        # incidents. Set an entry to 'enabled = false' to silence it without
+        # deleting it.
         thresholds = optional(map(object({
-          enabled                     = optional(bool, null)
-          threshold_usd               = optional(number, null)
-          window_seconds              = optional(number, null)
-          duration_seconds            = optional(number, null)
-          evaluation_interval_seconds = optional(number, null)
+          enabled                     = optional(bool, true)
+          threshold_usd               = number
+          window_seconds              = optional(number, 86400)
+          duration_seconds            = optional(number, 0)
+          evaluation_interval_seconds = optional(number, 300)
           severity                    = optional(string, null)
           notification_enabled        = optional(bool, null)
           notification_channels       = optional(list(string), null)
-          notification_prompts        = optional(list(string), null)
-          auto_close_seconds          = optional(number, null)
+          notification_prompts        = optional(list(string), ["OPENED"])
+          auto_close_seconds          = optional(number, 86400)
         })), {})
       }), {})
 
@@ -914,10 +915,7 @@ variable "vertex_ai" {
   validation {
     condition = alltrue([
       for name, threshold in var.vertex_ai.alerts.cost.thresholds :
-      # coalesce, not a null guard with ||: Terraform evaluates both sides of ||,
-      # so comparing a null threshold_usd would fail before the guard is read.
-      coalesce(threshold.threshold_usd, 1) > 0 &&
-      coalesce(threshold.window_seconds, 86400) >= 60
+      threshold.threshold_usd > 0 && threshold.window_seconds >= 60
     ])
     error_message = "A cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
   }

@@ -88,7 +88,7 @@ locals {
   # outside a dashboard widget.
   vertex_ai_cost_windows = toset(concat(
     ["$${__interval}"],
-    [for name, threshold in local.vertex_ai_effective_cost_thresholds : "${threshold.window_seconds}s"],
+    [for name, threshold in var.vertex_ai.alerts.cost.thresholds : "${threshold.window_seconds}s"],
   ))
 
   # PromQL is the only generally available way to multiply a series by a price:
@@ -123,77 +123,19 @@ locals {
     if length(terms) > 0
   }
 
-  # Thresholds the module ships so a consumer gets a working cost alert without
-  # writing one. They are a STARTING POINT, not a calibrated value: unlike a
-  # utilisation ratio, an absolute amount does not transfer between projects, so
-  # a project spending a few dollars a day never trips them and one spending
-  # hundreds trips them constantly. Set 'threshold_usd' to your own budget the
-  # first time you enable the service.
-  vertex_ai_module_cost_thresholds = {
-    daily_warning = {
-      threshold_usd        = 60
-      severity             = "WARNING"
-      notification_prompts = ["OPENED"]
-    }
-    daily_critical = {
-      threshold_usd        = 100
-      severity             = "CRITICAL"
-      notification_prompts = ["OPENED", "CLOSED"]
-    }
-  }
-
-  # Applied when neither the module threshold nor the consumer sets a field.
-  vertex_ai_cost_threshold_fallbacks = {
-    enabled                     = true
-    threshold_usd               = null
-    window_seconds              = 86400
-    duration_seconds            = 0
-    evaluation_interval_seconds = 300
-    severity                    = null
-    notification_enabled        = null
-    notification_channels       = null
-    notification_prompts        = ["OPENED"]
-    auto_close_seconds          = 86400
-  }
-
-  vertex_ai_cost_threshold_names = distinct(concat(
-    keys(local.vertex_ai_module_cost_thresholds),
-    keys(var.vertex_ai.alerts.cost.thresholds),
-  ))
-
-  # Resolution is per field, consumer first, then the module threshold, then the
-  # fallback. Field-wise rather than whole-entry so overriding only the amount
-  # keeps that threshold's severity and prompts. Every attribute is written
-  # explicitly: merge() of two maps whose element types differ yields an object
-  # rather than a map(object), which for_each cannot consume.
-  vertex_ai_effective_cost_thresholds = {
-    for name in local.vertex_ai_cost_threshold_names :
-    name => {
-      enabled                     = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].enabled, null), try(local.vertex_ai_module_cost_thresholds[name].enabled, null), local.vertex_ai_cost_threshold_fallbacks.enabled), true)
-      threshold_usd               = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].threshold_usd, null), try(local.vertex_ai_module_cost_thresholds[name].threshold_usd, null)), null)
-      window_seconds              = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].window_seconds, null), try(local.vertex_ai_module_cost_thresholds[name].window_seconds, null), local.vertex_ai_cost_threshold_fallbacks.window_seconds), 86400)
-      duration_seconds            = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].duration_seconds, null), try(local.vertex_ai_module_cost_thresholds[name].duration_seconds, null), local.vertex_ai_cost_threshold_fallbacks.duration_seconds), 0)
-      evaluation_interval_seconds = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].evaluation_interval_seconds, null), try(local.vertex_ai_module_cost_thresholds[name].evaluation_interval_seconds, null), local.vertex_ai_cost_threshold_fallbacks.evaluation_interval_seconds), 300)
-      severity                    = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].severity, null), try(local.vertex_ai_module_cost_thresholds[name].severity, null)), null)
-      notification_enabled        = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].notification_enabled, null), try(local.vertex_ai_module_cost_thresholds[name].notification_enabled, null)), null)
-      notification_channels       = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].notification_channels, null), try(local.vertex_ai_module_cost_thresholds[name].notification_channels, null)), null)
-      notification_prompts        = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].notification_prompts, null), try(local.vertex_ai_module_cost_thresholds[name].notification_prompts, null), local.vertex_ai_cost_threshold_fallbacks.notification_prompts), ["OPENED"])
-      auto_close_seconds          = try(coalesce(try(var.vertex_ai.alerts.cost.thresholds[name].auto_close_seconds, null), try(local.vertex_ai_module_cost_thresholds[name].auto_close_seconds, null), local.vertex_ai_cost_threshold_fallbacks.auto_close_seconds), 86400)
-    }
-  }
-
   # A threshold materialises only when the service and the cost family are on,
   # at least one model carries a price (an expression that is constantly
-  # vector(0) would never fire), the threshold is enabled and it names a budget.
-  vertex_ai_cost_alerts = {
-    for name, threshold in local.vertex_ai_effective_cost_thresholds :
+  # vector(0) would never fire) and the threshold itself is enabled. The module
+  # ships no threshold: the amount is a budget only the consumer knows.
+  vertex_ai_cost_alerts = var.vertex_ai.enabled && var.vertex_ai.alerts.cost.enabled && length(local.vertex_ai_cost_terms) > 0 ? {
+    for name, threshold in var.vertex_ai.alerts.cost.thresholds :
     name => merge(threshold, {
       channels = threshold.notification_enabled == false ? [] : (
         threshold.notification_channels != null ? threshold.notification_channels : local.vertex_ai_notification_channels
       )
     })
-    if var.vertex_ai.enabled && var.vertex_ai.alerts.cost.enabled && length(local.vertex_ai_cost_terms) > 0 && threshold.enabled && threshold.threshold_usd != null
-  }
+    if threshold.enabled
+  } : {}
 
   vertex_ai_error_rate_enabled = var.vertex_ai.enabled && var.vertex_ai.alerts.error_rate.enabled
 

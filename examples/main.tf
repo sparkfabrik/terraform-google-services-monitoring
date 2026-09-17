@@ -249,26 +249,30 @@ module "example" {
     }
   }
 
-  # Vertex AI consumption and estimated cost. 'enabled' is the only switch that
-  # has to be flipped: it brings up the dashboard, the two shipped cost
-  # thresholds (60 USD warning and 100 USD critical per day) and the error-rate
-  # alert. The shipped amounts are a starting point, not a budget: set
-  # threshold_usd to your own figure.
+  # Vertex AI consumption and estimated cost. 'enabled' brings up the dashboard
+  # and the error-rate alert on its own. Cost thresholds are always declared
+  # here: the amount is a budget only this project knows, so the module ships
+  # none and no cost alert exists until one is written below.
   vertex_ai = {
     enabled = true
 
     alerts = {
       cost = {
         thresholds = {
-          # Override one field; the rest of that threshold is untouched.
-          daily_critical = { threshold_usd = 250 }
-          # Add your own; the shipped thresholds are kept.
+          daily_warning = {
+            threshold_usd = 60
+            severity      = "WARNING"
+          }
+          daily_critical = {
+            threshold_usd        = 100
+            severity             = "CRITICAL"
+            notification_prompts = ["OPENED", "CLOSED"]
+          }
           hourly_spike = {
             threshold_usd  = 20
             window_seconds = 3600
             severity       = "WARNING"
           }
-          # Switch a shipped threshold off with { enabled = false }.
         }
       }
     }
