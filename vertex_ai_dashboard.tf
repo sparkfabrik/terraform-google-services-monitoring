@@ -135,7 +135,7 @@ locals {
     }
 
     tokens_by_model_chart = {
-      title = "Tokens by model and type"
+      title = "Tokens by model"
       xyChart = {
         dataSets = [{
           plotType   = "STACKED_BAR"
@@ -147,7 +147,32 @@ locals {
                 alignmentPeriod    = "60s"
                 perSeriesAligner   = "ALIGN_SUM"
                 crossSeriesReducer = "REDUCE_SUM"
-                groupByFields      = ["resource.label.model_user_id", "metric.label.type"]
+                groupByFields      = ["resource.label.model_user_id"]
+              }
+            }
+          }
+        }]
+        yAxis = { label = "tokens", scale = "LINEAR" }
+      }
+    }
+
+    # Split by model and by token type on separate charts rather than on one
+    # grouped by both: six models times five token types is around thirty series,
+    # far past the point where adjacent colours stop being tellable apart.
+    tokens_by_type_chart = {
+      title = "Tokens by type"
+      xyChart = {
+        dataSets = [{
+          plotType   = "STACKED_BAR"
+          targetAxis = "Y1"
+          timeSeriesQuery = {
+            timeSeriesFilter = {
+              filter = local.vertex_ai_token_filter
+              aggregation = {
+                alignmentPeriod    = "60s"
+                perSeriesAligner   = "ALIGN_SUM"
+                crossSeriesReducer = "REDUCE_SUM"
+                groupByFields      = ["metric.label.type"]
               }
             }
           }
@@ -216,7 +241,7 @@ locals {
                 alignmentPeriod    = "60s"
                 perSeriesAligner   = "ALIGN_RATE"
                 crossSeriesReducer = "REDUCE_SUM"
-                groupByFields      = ["resource.label.model_user_id", "metric.label.response_code"]
+                groupByFields      = ["metric.label.response_code"]
               }
             }
           }
@@ -241,7 +266,7 @@ locals {
                 alignmentPeriod    = "60s"
                 perSeriesAligner   = "ALIGN_RATE"
                 crossSeriesReducer = "REDUCE_SUM"
-                groupByFields      = ["resource.label.model_user_id", "metric.label.error_category"]
+                groupByFields      = ["metric.label.error_category"]
               }
             }
           }
@@ -250,43 +275,49 @@ locals {
       }
     }
 
-    latency_chart = {
-      title = "Model invocation latency per model"
+    latency_p50_chart = {
+      title = "Invocation latency p50 per model"
       xyChart = {
-        dataSets = [
-          {
-            plotType       = "LINE"
-            targetAxis     = "Y1"
-            legendTemplate = "p50"
-            timeSeriesQuery = {
-              timeSeriesFilter = {
-                filter = local.vertex_ai_latency_filter
-                aggregation = {
-                  alignmentPeriod    = "60s"
-                  perSeriesAligner   = "ALIGN_PERCENTILE_50"
-                  crossSeriesReducer = "REDUCE_MEAN"
-                  groupByFields      = ["resource.label.model_user_id"]
-                }
+        dataSets = [{
+          plotType   = "LINE"
+          targetAxis = "Y1"
+          timeSeriesQuery = {
+            timeSeriesFilter = {
+              filter = local.vertex_ai_latency_filter
+              aggregation = {
+                alignmentPeriod    = "60s"
+                perSeriesAligner   = "ALIGN_PERCENTILE_50"
+                crossSeriesReducer = "REDUCE_MEAN"
+                groupByFields      = ["resource.label.model_user_id"]
               }
             }
-          },
-          {
-            plotType       = "LINE"
-            targetAxis     = "Y1"
-            legendTemplate = "p95"
-            timeSeriesQuery = {
-              timeSeriesFilter = {
-                filter = local.vertex_ai_latency_filter
-                aggregation = {
-                  alignmentPeriod    = "60s"
-                  perSeriesAligner   = "ALIGN_PERCENTILE_95"
-                  crossSeriesReducer = "REDUCE_MEAN"
-                  groupByFields      = ["resource.label.model_user_id"]
-                }
+          }
+        }]
+        yAxis = { label = "ms", scale = "LINEAR" }
+      }
+    }
+
+    # One percentile per chart. Both on one chart would put twelve lines on six
+    # colours, and a static legendTemplate would label every line of a dataset
+    # "p50", losing the model name that identifies it.
+    latency_p95_chart = {
+      title = "Invocation latency p95 per model"
+      xyChart = {
+        dataSets = [{
+          plotType   = "LINE"
+          targetAxis = "Y1"
+          timeSeriesQuery = {
+            timeSeriesFilter = {
+              filter = local.vertex_ai_latency_filter
+              aggregation = {
+                alignmentPeriod    = "60s"
+                perSeriesAligner   = "ALIGN_PERCENTILE_95"
+                crossSeriesReducer = "REDUCE_MEAN"
+                groupByFields      = ["resource.label.model_user_id"]
               }
             }
-          },
-        ]
+          }
+        }]
         yAxis = { label = "ms", scale = "LINEAR" }
       }
     }
@@ -351,7 +382,10 @@ locals {
         ],
       ),
       [for widget in [local.vertex_ai_dashboard_widgets.cost_by_model_chart] : { width = 48, height = 16, widget = widget } if local.vertex_ai_dashboard_cost],
-      [{ width = 48, height = 16, widget = local.vertex_ai_dashboard_widgets.tokens_by_model_chart }],
+      [
+        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.tokens_by_model_chart },
+        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.tokens_by_type_chart },
+      ],
       [
         { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.throughput_chart },
         { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.qps_chart },
@@ -361,10 +395,11 @@ locals {
         { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.error_category_chart },
       ],
       [
-        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.latency_chart },
-        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.ttft_chart },
+        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.latency_p50_chart },
+        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.latency_p95_chart },
       ],
       [
+        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.ttft_chart },
         { width = 24, height = 8, widget = local.vertex_ai_dashboard_widgets.cache_share_scorecard },
       ],
     ] : row if length(row) > 0

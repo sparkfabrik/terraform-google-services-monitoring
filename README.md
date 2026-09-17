@@ -34,7 +34,7 @@ Supported services:
   - Pod restart alerts for LiteLLM containers
 
 - Vertex AI
-  - Consumption dashboard: a note stating that the cost is an estimate and when the price table was last checked, estimated cost per model, tokens by model and type, consumed token throughput, invocations per second per model, invocations by response code and error category, invocation and first-token latency, share of prompt tokens served from cache
+  - Consumption dashboard: a note stating that the cost is an estimate and when the price table was last checked, estimated cost per model, tokens by model and by type, consumed token throughput, invocations per second per model, invocations by response code and by error category, invocation latency p50 and p95, first-token latency, share of prompt tokens served from cache
   - Estimated-cost alerts on one or more named thresholds, each with its own window and notification channels
   - Invocation error-rate alert on the share of a given response code, 429 by default
 
@@ -57,6 +57,8 @@ Put this on a recurring issue. Re-run an inventory of the live `token_count` ser
 ### Reading the Vertex AI dashboard
 
 The dashboard states in its first tile that the figures are an estimate and when the table was last checked. The estimate is not what you are invoiced: list prices ignore committed-use discounts, negotiated rates and credits. The authoritative figure is the BigQuery billing export, which is SKU-level and lags by about a day.
+
+Each chart is split so it stays under the handful of series a reader can tell apart by colour: tokens by model and tokens by type are two charts rather than one grouped by both, and the two latency percentiles are two charts rather than twelve lines on one.
 
 Two token widgets look similar and are not. `token_count` is the raw number of tokens; `consumed_token_throughput` is weighted on the model burndown rate and is the figure quota accounting uses. They are charted separately on purpose.
 
