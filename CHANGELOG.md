@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `vertex_ai` service (disabled by default): a Cloud Monitoring dashboard for Vertex AI publisher-model consumption with an estimated cost per model, alert policies on one or more named estimated-cost thresholds, and an alert policy on the share of invocations answered with a given response code (429 by default). The dashboard and each alert family are enabled independently and are all off by default.
+- `vertex_ai.pricing`: a hand-maintained price table shipped as a module default, keyed by model, token type and endpoint class, overridable per consumer. Cost is estimated as tokens multiplied by list price, in USD, because Vertex AI publishes no spend metric to Cloud Monitoring.
+
 ## [0.23.0] - 2026-08-19
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.22.0...0.23.0)

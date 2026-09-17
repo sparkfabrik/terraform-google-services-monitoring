@@ -738,3 +738,179 @@ variable "gke_node_count" {
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
   }
 }
+
+variable "vertex_ai" {
+  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The service, the dashboard and each alert family are enabled independently and every one of them is off by default. 'alerts.cost.thresholds' is a map of named thresholds and each entry becomes its own alert policy, so a warning level and a critical level raise distinguishable incidents. 'alerts.error_rate' watches the share of invocations answered with a given response code, 429 by default; note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert is informative and has no quota increase as a remedy. Notification routing resolves per alert: 'notification_channels' on the alert inherits the service-level list when null, which in turn inherits the root list when empty. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    models                = optional(list(string), null)
+
+    # Date the price table was last checked against the published list, shown on
+    # the dashboard next to the estimate. Override it together with 'pricing':
+    # a project that supplies its own prices owns its own verification date.
+    pricing_verified_on = optional(string, "2026-09-17")
+
+    # USD per 1M tokens, keyed by the metric's 'type' label value.
+    #
+    # MAINTAINED BY HAND. Google publishes no price API that covers every model
+    # here: Anthropic models have no SKU at all in the Cloud Billing Catalog and
+    # the embedding SKU cannot be identified from it, so there is nothing to read
+    # this table from automatically. Review it on a recurring issue, not on a
+    # trigger: a stale price produces a wrong cost with no visible symptom.
+    #
+    # The model set was taken from the live token_count series of a real project
+    # over 40 days, not from the models someone remembered were in use: two of
+    # the entries below were already serving traffic before anyone listed them.
+    #
+    # Verified against the Google pricing page on 2026-09-16 (gemini-3.5-flash,
+    # gemini-3-flash-preview, gemini-embedding-001, claude-sonnet-4-6) and on
+    # 2026-09-17 (gemini-3.7-flash, claude-sonnet-5), cross-checked with the
+    # Cloud Billing Catalog API where a SKU exists. SKU ids to diff a Gemini
+    # price against:
+    #   gemini-3.5-flash       global  input 9733-FF95-45E3, output 4E73-15BD-0D78
+    #   gemini-3-flash-preview global  input 7EBE-3B46-F75C, output 0127-F0B7-365E
+    #
+    # Regional and multi-region endpoints carry a 10% premium over the global one.
+    # The published values are rounded, so the regional table holds them verbatim
+    # instead of applying a multiplier.
+    #
+    # The cache_* token types are observed on the Anthropic series but are not
+    # documented: the metric descriptor only defines input and output.
+    pricing = optional(map(object({
+      global   = map(number)
+      regional = optional(map(number), null)
+      })), {
+      "gemini-3.5-flash" = {
+        global   = { input = 1.50, output = 9.00 }
+        regional = { input = 1.65, output = 9.90 }
+      }
+      "gemini-3-flash-preview" = {
+        global = { input = 0.50, output = 3.00 }
+      }
+      # INTRODUCTORY PRICING, EXPIRES 2026-12-31. From 2027-01-01 the published
+      # standard price doubles to 1.50 / 7.50 global and 1.65 / 8.25 regional.
+      # Nothing switches these values automatically: change them by hand on that
+      # date, or the estimate silently halves the real spend of this model.
+      "gemini-3.7-flash" = {
+        global   = { input = 0.75, output = 3.75 }
+        regional = { input = 0.825, output = 4.125 }
+      }
+      # Served only from single regions: the live 'source' label is a region name
+      # such as us-central1 or europe-west8, never 'global'. No regional column is
+      # published for embeddings, and the 10% non-global premium is scoped to the
+      # GA Gemini 3+ generative families, so regional traffic is correctly priced
+      # at the same rate. Watch for a "Non-global" row appearing in the embedding
+      # pricing table, which is what would change this.
+      "gemini-embedding-001" = {
+        global = { input = 0.15, output = 0 }
+      }
+      "claude-sonnet-4-6" = {
+        global = {
+          input                = 3.00
+          output               = 15.00
+          cache_read_input     = 0.30
+          cache_write_input    = 3.75
+          cache_write_1h_input = 6.00
+        }
+        regional = {
+          input                = 3.30
+          output               = 16.50
+          cache_read_input     = 0.33
+          cache_write_input    = 4.13
+          cache_write_1h_input = 6.60
+        }
+      }
+      "claude-sonnet-5" = {
+        global = {
+          input                = 2.00
+          output               = 10.00
+          cache_read_input     = 0.20
+          cache_write_input    = 2.50
+          cache_write_1h_input = 4.00
+        }
+        regional = {
+          input                = 2.20
+          output               = 11.00
+          cache_read_input     = 0.22
+          cache_write_input    = 2.75
+          cache_write_1h_input = 4.40
+        }
+      }
+    })
+
+    dashboard = optional(object({
+      enabled      = optional(bool, false)
+      display_name = optional(string, null)
+      cost_widgets = optional(bool, true)
+    }), {})
+
+    alerts = optional(object({
+      cost = optional(object({
+        thresholds = optional(map(object({
+          threshold_usd               = number
+          window_seconds              = optional(number, 86400)
+          duration_seconds            = optional(number, 0)
+          evaluation_interval_seconds = optional(number, 300)
+          severity                    = optional(string, null)
+          notification_enabled        = optional(bool, null)
+          notification_channels       = optional(list(string), null)
+          notification_prompts        = optional(list(string), ["OPENED"])
+          auto_close_seconds          = optional(number, 86400)
+        })), {})
+      }), {})
+
+      error_rate = optional(object({
+        enabled                     = optional(bool, false)
+        response_code               = optional(string, "429")
+        threshold_ratio             = optional(number, 0.01)
+        window_seconds              = optional(number, 60)
+        duration_seconds            = optional(number, 300)
+        evaluation_interval_seconds = optional(number, 60)
+        severity                    = optional(string, null)
+        notification_enabled        = optional(bool, null)
+        notification_channels       = optional(list(string), null)
+        notification_prompts        = optional(list(string), ["OPENED"])
+        auto_close_seconds          = optional(number, 3600)
+      }), {})
+    }), {})
+  })
+
+  validation {
+    condition = alltrue([
+      for model_name, config in var.vertex_ai.pricing :
+      trimspace(model_name) != "" && length(config.global) > 0
+    ])
+    error_message = "Each pricing entry must have a non-empty model name (map key) and at least one price in its global table."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for model_name, config in var.vertex_ai.pricing : [
+        for token_type, price in merge(config.global, coalesce(config.regional, {})) : price >= 0
+      ]
+    ]))
+    error_message = "Prices must be zero or positive."
+  }
+
+  validation {
+    condition = alltrue([
+      for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+      threshold.threshold_usd > 0 && threshold.window_seconds >= 60
+    ])
+    error_message = "Each cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
+  }
+
+  validation {
+    condition     = var.vertex_ai.alerts.error_rate.threshold_ratio > 0 && var.vertex_ai.alerts.error_rate.threshold_ratio <= 1
+    error_message = "The error_rate threshold_ratio is a share of the invocations and must be greater than 0 and at most 1."
+  }
+
+  validation {
+    condition     = var.vertex_ai.models == null ? true : length(var.vertex_ai.models) > 0
+    error_message = "When set, models must list at least one model; use null to price every model in the table."
+  }
+}

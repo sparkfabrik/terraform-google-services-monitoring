@@ -248,4 +248,53 @@ module "example" {
       }
     }
   }
+
+  vertex_ai = {
+    enabled = true
+
+    # The dashboard charts every model with traffic. The cost widgets only cover
+    # the models that carry a price, and are opt-in within the dashboard.
+    dashboard = {
+      enabled      = true
+      cost_widgets = true
+    }
+
+    alerts = {
+      # Two named thresholds on the same rolling window raise two separate
+      # incidents, so a warning and a critical are told apart in the notification.
+      cost = {
+        thresholds = {
+          daily_warning = {
+            threshold_usd  = 60
+            window_seconds = 86400
+            severity       = "WARNING"
+          }
+          daily_critical = {
+            threshold_usd        = 100
+            window_seconds       = 86400
+            severity             = "CRITICAL"
+            notification_prompts = ["OPENED", "CLOSED"]
+          }
+        }
+      }
+
+      # On Gemini pay-as-you-go a 429 is contention on a shared resource, not an
+      # exhausted project quota: this alert dates a degradation, it does not
+      # point at a quota increase to request.
+      error_rate = {
+        enabled         = true
+        threshold_ratio = 0.01
+      }
+    }
+
+    # The module ships a price table for the models it already knows. Override it
+    # only when a project needs a price the module does not carry yet, or a
+    # negotiated rate.
+    # pricing = {
+    #   "gemini-3.5-flash" = {
+    #     global   = { input = 1.50, output = 9.00 }
+    #     regional = { input = 1.65, output = 9.90 }
+    #   }
+    # }
+  }
 }
