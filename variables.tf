@@ -860,9 +860,15 @@ variable "vertex_ai" {
         enabled = optional(bool, true)
         # Routing and prompts declared once for every threshold of the family.
         # A threshold overrides them only when it needs something different.
+        #
+        # Both prompts by default: a cost threshold watches a rolling window, so
+        # the incident closing means the spend fell back under the budget, which
+        # is as worth a notification as it crossing. The error-rate alert keeps
+        # the opening prompt alone, because its incidents auto-close after an
+        # hour and every lull would notify.
         notification_enabled  = optional(bool, null)
         notification_channels = optional(list(string), null)
-        notification_prompts  = optional(list(string), ["OPENED"])
+        notification_prompts  = optional(list(string), ["OPENED", "CLOSED"])
         # Always declared by the consumer. A monetary amount is a budget, and
         # only the project that owns the spend knows it: unlike a utilisation
         # ratio it does not transfer between projects, so the module ships none

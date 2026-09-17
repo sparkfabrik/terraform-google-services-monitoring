@@ -258,9 +258,6 @@ module "example" {
 
     alerts = {
       cost = {
-        # Routing declared once: every threshold below inherits it.
-        notification_prompts = ["OPENED", "CLOSED"]
-
         thresholds = {
           daily_warning = {
             threshold_usd = 60
