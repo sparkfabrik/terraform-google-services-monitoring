@@ -10,8 +10,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `vertex_ai` service (disabled by default): a Cloud Monitoring dashboard for Vertex AI publisher-model consumption with an estimated cost per model, alert policies on one or more named estimated-cost thresholds, and an alert policy on the share of invocations answered with a given response code (429 by default). The dashboard and each alert family are enabled independently and are all off by default.
-- `vertex_ai.pricing`: a hand-maintained price table shipped as a module default, keyed by model, token type and endpoint class, overridable per consumer. Cost is estimated as tokens multiplied by list price, in USD, because Vertex AI publishes no spend metric to Cloud Monitoring.
+- `vertex_ai` service: a Cloud Monitoring dashboard for Vertex AI publisher-model consumption with an estimated cost per model, alert policies on estimated-cost thresholds, and an alert policy on the share of invocations answered with a given response code (429 by default). The service is off by default; `enabled = true` is the only switch a consumer has to flip, and the dashboard, the cost widgets, the cost alerts and the error-rate alert can each be turned off on their own.
+- `vertex_ai.alerts.cost.thresholds`: two named thresholds ship with the module (60 USD warning and 100 USD critical over a rolling day) and each becomes its own alert policy. Consumer entries are resolved field by field on top of them, so overriding one field keeps the rest of that threshold, adding a key keeps the shipped ones, and `{ enabled = false }` switches a shipped threshold off. The shipped amounts are a starting point, not a calibrated budget.
+- `vertex_ai.pricing`: a hand-maintained price table shipped as a module default, keyed by model, token type and endpoint class, overridable per consumer, with `pricing_verified_on` shown on the dashboard. Cost is estimated as tokens multiplied by list price, in USD, because Vertex AI publishes no spend metric to Cloud Monitoring. The table must be reviewed periodically; see the README.
 
 ## [0.23.0] - 2026-08-19
 

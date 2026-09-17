@@ -249,47 +249,33 @@ module "example" {
     }
   }
 
+  # Vertex AI consumption and estimated cost. 'enabled' is the only switch that
+  # has to be flipped: it brings up the dashboard, the two shipped cost
+  # thresholds (60 USD warning and 100 USD critical per day) and the error-rate
+  # alert. The shipped amounts are a starting point, not a budget: set
+  # threshold_usd to your own figure.
   vertex_ai = {
     enabled = true
 
-    # The dashboard charts every model with traffic. The cost widgets only cover
-    # the models that carry a price, and are opt-in within the dashboard.
-    dashboard = {
-      enabled      = true
-      cost_widgets = true
-    }
-
     alerts = {
-      # Two named thresholds on the same rolling window raise two separate
-      # incidents, so a warning and a critical are told apart in the notification.
       cost = {
         thresholds = {
-          daily_warning = {
-            threshold_usd  = 60
-            window_seconds = 86400
+          # Override one field; the rest of that threshold is untouched.
+          daily_critical = { threshold_usd = 250 }
+          # Add your own; the shipped thresholds are kept.
+          hourly_spike = {
+            threshold_usd  = 20
+            window_seconds = 3600
             severity       = "WARNING"
           }
-          daily_critical = {
-            threshold_usd        = 100
-            window_seconds       = 86400
-            severity             = "CRITICAL"
-            notification_prompts = ["OPENED", "CLOSED"]
-          }
+          # Switch a shipped threshold off with { enabled = false }.
         }
-      }
-
-      # On Gemini pay-as-you-go a 429 is contention on a shared resource, not an
-      # exhausted project quota: this alert dates a degradation, it does not
-      # point at a quota increase to request.
-      error_rate = {
-        enabled         = true
-        threshold_ratio = 0.01
       }
     }
 
-    # The module ships a price table for the models it already knows. Override it
-    # only when a project needs a price the module does not carry yet, or a
-    # negotiated rate.
+    # The module ships a price table for the models it already knows, in USD per
+    # million tokens. Override it only for a price the module does not carry yet
+    # or a negotiated rate, and move pricing_verified_on with it.
     # pricing = {
     #   "gemini-3.5-flash" = {
     #     global   = { input = 1.50, output = 9.00 }

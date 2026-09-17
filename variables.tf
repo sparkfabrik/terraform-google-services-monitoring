@@ -756,11 +756,18 @@ variable "vertex_ai" {
 
     # USD per 1M tokens, keyed by the metric's 'type' label value.
     #
-    # MAINTAINED BY HAND. Google publishes no price API that covers every model
-    # here: Anthropic models have no SKU at all in the Cloud Billing Catalog and
-    # the embedding SKU cannot be identified from it, so there is nothing to read
-    # this table from automatically. Review it on a recurring issue, not on a
-    # trigger: a stale price produces a wrong cost with no visible symptom.
+    # MAINTAINED BY HAND, AND IT MUST BE REVIEWED PERIODICALLY.
+    #
+    # Google publishes no price API that covers every model here: Anthropic
+    # models have no SKU at all in the Cloud Billing Catalog and the embedding
+    # SKU cannot be identified from it, so nothing can read this table for you
+    # and nothing will tell you when it is wrong. A stale price produces a
+    # confident wrong cost with no error and no visible symptom.
+    #
+    # Put the review on a recurring issue, not on a trigger, and re-inventory
+    # the live token_count series each time: a model routed through the gateway
+    # after this table was written shows up in the token widgets and silently
+    # contributes nothing to the estimate. See the README for the full rationale.
     #
     # The model set was taken from the live token_count series of a real project
     # over 40 days, not from the models someone remembered were in use: two of
@@ -843,28 +850,36 @@ variable "vertex_ai" {
     })
 
     dashboard = optional(object({
-      enabled      = optional(bool, false)
+      enabled      = optional(bool, true)
       display_name = optional(string, null)
       cost_widgets = optional(bool, true)
     }), {})
 
     alerts = optional(object({
       cost = optional(object({
+        enabled = optional(bool, true)
+        # Merged on top of the thresholds the module ships, so adding one does
+        # not discard them. Reuse a module key to replace that threshold, or set
+        # it to { enabled = false } to switch it off.
+        # Every field defaults to null so an unset field means "inherit", never
+        # "reset to the schema default": overriding one field of a module
+        # threshold leaves its other fields alone.
         thresholds = optional(map(object({
-          threshold_usd               = number
-          window_seconds              = optional(number, 86400)
-          duration_seconds            = optional(number, 0)
-          evaluation_interval_seconds = optional(number, 300)
+          enabled                     = optional(bool, null)
+          threshold_usd               = optional(number, null)
+          window_seconds              = optional(number, null)
+          duration_seconds            = optional(number, null)
+          evaluation_interval_seconds = optional(number, null)
           severity                    = optional(string, null)
           notification_enabled        = optional(bool, null)
           notification_channels       = optional(list(string), null)
-          notification_prompts        = optional(list(string), ["OPENED"])
-          auto_close_seconds          = optional(number, 86400)
+          notification_prompts        = optional(list(string), null)
+          auto_close_seconds          = optional(number, null)
         })), {})
       }), {})
 
       error_rate = optional(object({
-        enabled                     = optional(bool, false)
+        enabled                     = optional(bool, true)
         response_code               = optional(string, "429")
         threshold_ratio             = optional(number, 0.01)
         window_seconds              = optional(number, 60)
@@ -899,10 +914,12 @@ variable "vertex_ai" {
   validation {
     condition = alltrue([
       for name, threshold in var.vertex_ai.alerts.cost.thresholds :
-      threshold.threshold_usd > 0 && threshold.window_seconds >= 60
+      (threshold.threshold_usd == null || threshold.threshold_usd > 0) &&
+      (threshold.window_seconds == null || threshold.window_seconds >= 60)
     ])
-    error_message = "Each cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
+    error_message = "A cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
   }
+
 
   validation {
     condition     = var.vertex_ai.alerts.error_rate.threshold_ratio > 0 && var.vertex_ai.alerts.error_rate.threshold_ratio <= 1
