@@ -44,8 +44,15 @@ locals {
 
   # One term per (model, token type, endpoint class) that carries a price.
   # When a model has no regional table, or one identical to its global table,
-  # the two classes collapse into a single term with no 'source' selector, which
-  # halves the generated expression for the common case.
+  # the two classes collapse into a single term, which halves the generated
+  # expression for the common case.
+  #
+  # Batch traffic is excluded everywhere. The metric reports it with a 'batch_'
+  # prefix on 'source' ("batch_global", "batch_<region>"), it is billed at a
+  # different rate from online, and without the exclusion it would fall on the
+  # wrong side of the global/regional split and be costed at the regional price.
+  # 'source="global"' already excludes "batch_global" on its own; the other two
+  # selectors need the exclusion written out.
   vertex_ai_cost_terms_by_model = {
     for model_name in local.vertex_ai_priced_models :
     model_name => (
@@ -56,7 +63,7 @@ locals {
           model           = model_name
           type            = token_type
           price           = price
-          source_selector = ""
+          source_selector = ", source!~\"batch_.*\""
         } if price > 0
       ]
       : concat(
@@ -73,7 +80,7 @@ locals {
             model           = model_name
             type            = token_type
             price           = price
-            source_selector = ", source!=\"global\""
+            source_selector = ", source!=\"global\", source!~\"batch_.*\""
           } if price > 0
         ],
       )
@@ -130,6 +137,7 @@ locals {
   vertex_ai_cost_alerts = var.vertex_ai.enabled && var.vertex_ai.alerts.cost.enabled && length(local.vertex_ai_cost_terms) > 0 ? {
     for name, threshold in var.vertex_ai.alerts.cost.thresholds :
     name => merge(threshold, {
+      severity = threshold.severity != null ? upper(threshold.severity) : null
       channels = threshold.notification_enabled == false ? [] : (
         threshold.notification_channels != null ? threshold.notification_channels : local.vertex_ai_notification_channels
       )
@@ -137,7 +145,8 @@ locals {
     if threshold.enabled
   } : {}
 
-  vertex_ai_error_rate_enabled = var.vertex_ai.enabled && var.vertex_ai.alerts.error_rate.enabled
+  vertex_ai_error_rate_enabled  = var.vertex_ai.enabled && var.vertex_ai.alerts.error_rate.enabled
+  vertex_ai_error_rate_severity = var.vertex_ai.alerts.error_rate.severity != null ? upper(var.vertex_ai.alerts.error_rate.severity) : null
 
   vertex_ai_error_rate_channels = var.vertex_ai.alerts.error_rate.notification_enabled == false ? [] : (
     var.vertex_ai.alerts.error_rate.notification_channels != null ? var.vertex_ai.alerts.error_rate.notification_channels : local.vertex_ai_notification_channels
@@ -167,6 +176,19 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
     }
   }
 
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      Estimated Vertex AI spend over the last ${each.value.window_seconds}s crossed ${each.value.threshold_usd} USD.
+
+      **This is an estimate, not an invoice.** Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the figure is tokens multiplied by the published list price, in USD. It ignores committed-use discounts, negotiated rates and credits, and it excludes batch traffic. The authoritative number is the BigQuery billing export, which is SKU-level and about a day behind.
+
+      A model with traffic but no entry in the module price table contributes nothing here, so real spend can be higher than this alert sees. Compare the "Tokens by model" and "Estimated cost by model" charts on the Vertex AI dashboard: a model in the first and missing from the second has no price configured.
+
+      A stale price table produces a wrong number with no other symptom. Check when it was last reviewed on the dashboard's first tile.
+    EOT
+  }
+
   notification_channels = each.value.channels
 
   alert_strategy {
@@ -192,7 +214,7 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   display_name = "Vertex AI ${var.vertex_ai.alerts.error_rate.response_code} response rate (project=${local.vertex_ai_project})"
   combiner     = "OR"
   enabled      = true
-  severity     = var.vertex_ai.alerts.error_rate.severity
+  severity     = local.vertex_ai_error_rate_severity
 
   conditions {
     display_name = "${var.vertex_ai.alerts.error_rate.response_code} share > ${var.vertex_ai.alerts.error_rate.threshold_ratio} per model"
@@ -210,6 +232,19 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
       duration            = "${var.vertex_ai.alerts.error_rate.duration_seconds}s"
       evaluation_interval = "${var.vertex_ai.alerts.error_rate.evaluation_interval_seconds}s"
     }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      More than ${var.vertex_ai.alerts.error_rate.threshold_ratio * 100}% of invocations to a Vertex AI model returned ${var.vertex_ai.alerts.error_rate.response_code}.
+
+      **On a Gemini pay-as-you-go model a 429 is contention on a shared resource, not an exhausted project quota.** Those models have no per-project requests-per-minute limit, so there is no quota increase to request: the alert dates a degradation, it does not point at a fix. The caller should back off and retry.
+
+      **On a partner model the reading is different**: those carry fixed per-region quotas, and a sustained 429 rate there can mean the quota is genuinely exhausted and worth raising.
+
+      The "Invocations by error category" chart on the Vertex AI dashboard separates the two cases: `capacity` is contention, `user` is a limit the caller crossed.
+    EOT
   }
 
   notification_channels = local.vertex_ai_error_rate_channels

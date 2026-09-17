@@ -50,7 +50,7 @@ locals {
           "This is not what you are invoiced: list prices carry no committed-use discount, no negotiated rate and no credit.",
           "Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so no real-time figure exists.",
           "The authoritative number is the BigQuery billing export, which is SKU-level and lags by about a day.",
-          "A model with traffic but no entry in the price table appears in the token widgets and contributes nothing here.",
+          "A model with traffic but no entry in the price table appears in the token widgets and contributes nothing here, and batch traffic is excluded from the estimate because it is billed at a different rate.",
         ])
       }
     }
@@ -283,11 +283,11 @@ locals {
           targetAxis = "Y1"
           timeSeriesQuery = {
             timeSeriesFilter = {
-              filter = local.vertex_ai_latency_filter
+              filter = "${local.vertex_ai_latency_filter} AND metric.labels.latency_type=\"total\""
               aggregation = {
                 alignmentPeriod    = "60s"
-                perSeriesAligner   = "ALIGN_PERCENTILE_50"
-                crossSeriesReducer = "REDUCE_MEAN"
+                perSeriesAligner   = "ALIGN_DELTA"
+                crossSeriesReducer = "REDUCE_PERCENTILE_50"
                 groupByFields      = ["resource.label.model_user_id"]
               }
             }
@@ -300,6 +300,14 @@ locals {
     # One percentile per chart. Both on one chart would put twelve lines on six
     # colours, and a static legendTemplate would label every line of a dataset
     # "p50", losing the model name that identifies it.
+    #
+    # The percentile is taken by the cross-series reducer, not by the aligner:
+    # these are DISTRIBUTION metrics split across latency_type and token-size
+    # buckets, so aligning each series to its own percentile and then averaging
+    # would produce a number no request ever had. ALIGN_DELTA merges the
+    # distributions first and REDUCE_PERCENTILE_* reads the percentile off the
+    # merged one. The filter pins latency_type to "total", the latency the
+    # caller actually waits; "model" and "overhead" are its two components.
     latency_p95_chart = {
       title = "Invocation latency p95 per model"
       xyChart = {
@@ -308,11 +316,11 @@ locals {
           targetAxis = "Y1"
           timeSeriesQuery = {
             timeSeriesFilter = {
-              filter = local.vertex_ai_latency_filter
+              filter = "${local.vertex_ai_latency_filter} AND metric.labels.latency_type=\"total\""
               aggregation = {
                 alignmentPeriod    = "60s"
-                perSeriesAligner   = "ALIGN_PERCENTILE_95"
-                crossSeriesReducer = "REDUCE_MEAN"
+                perSeriesAligner   = "ALIGN_DELTA"
+                crossSeriesReducer = "REDUCE_PERCENTILE_95"
                 groupByFields      = ["resource.label.model_user_id"]
               }
             }
@@ -333,8 +341,8 @@ locals {
               filter = local.vertex_ai_ttft_filter
               aggregation = {
                 alignmentPeriod    = "60s"
-                perSeriesAligner   = "ALIGN_PERCENTILE_50"
-                crossSeriesReducer = "REDUCE_MEAN"
+                perSeriesAligner   = "ALIGN_DELTA"
+                crossSeriesReducer = "REDUCE_PERCENTILE_50"
                 groupByFields      = ["resource.label.model_user_id"]
               }
             }
@@ -345,8 +353,12 @@ locals {
     }
 
     # Cached input is an order of magnitude cheaper than uncached input, so this
-    # ratio is the cheapest cost lever available. clamp_min keeps the widget from
-    # showing NaN when no prompt token was served at all in the window.
+    # ratio is the cheapest cost lever available. The denominator carries every
+    # prompt token class, cache writes included: on partner models 'input'
+    # counts only the uncached tokens, so leaving the write classes out would
+    # report a cache share of 100% for a workload that is half cache writes.
+    # clamp_min keeps the widget from showing NaN when no prompt token was
+    # served at all in the window.
     cache_share_scorecard = {
       title = "Share of prompt tokens served from cache"
       scorecard = {
@@ -354,7 +366,7 @@ locals {
           prometheusQuery = join("", [
             "(sum(increase({\"${local.vertex_ai_metrics.token_count}\", type=\"cache_read_input\"}[$${__interval}])) or on() vector(0))",
             " / clamp_min(",
-            "(sum(increase({\"${local.vertex_ai_metrics.token_count}\", type=~\"input|cache_read_input\"}[$${__interval}])) or on() vector(0))",
+            "(sum(increase({\"${local.vertex_ai_metrics.token_count}\", type=~\"input|cache_read_input|cache_write_input|cache_write_1h_input\"}[$${__interval}])) or on() vector(0))",
             ", 1)",
           ])
           outputFullDuration = true

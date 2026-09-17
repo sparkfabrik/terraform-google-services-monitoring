@@ -740,7 +740,7 @@ variable "gke_node_count" {
 }
 
 variable "vertex_ai" {
-  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations answered with a given response code, 429 by default; note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert is informative and has no quota increase as a remedy. Notification routing resolves per alert: 'notification_channels' on the alert inherits the service-level list when null, which in turn inherits the root list when empty. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
+  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. Batch traffic is excluded from the estimate altogether: the metric reports it with a 'batch_' prefix on its 'source' label and it is billed at a different rate, so costing it with the online prices would be wrong in both directions. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the map key is the policy identity, so renaming a threshold destroys and recreates its policy and loses its incident history; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations answered with a given response code, 429 by default; note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert is informative and has no quota increase as a remedy. Notification routing resolves per alert: 'notification_channels' on the alert inherits the service-level list when null, which in turn inherits the root list when empty. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -871,7 +871,7 @@ variable "vertex_ai" {
           window_seconds              = optional(number, 86400)
           duration_seconds            = optional(number, 0)
           evaluation_interval_seconds = optional(number, 300)
-          severity                    = optional(string, null)
+          severity                    = optional(string, null) # any casing, normalized to uppercase
           notification_enabled        = optional(bool, null)
           notification_channels       = optional(list(string), null)
           notification_prompts        = optional(list(string), ["OPENED"])
@@ -880,10 +880,13 @@ variable "vertex_ai" {
       }), {})
 
       error_rate = optional(object({
-        enabled                     = optional(bool, true)
-        response_code               = optional(string, "429")
-        threshold_ratio             = optional(number, 0.01)
-        window_seconds              = optional(number, 60)
+        enabled         = optional(bool, true)
+        response_code   = optional(string, "429")
+        threshold_ratio = optional(number, 0.01)
+        # At least twice the metric sampling interval. A rate() window equal to
+        # the sampling period often spans a single sample and returns nothing,
+        # which resets the pending state and can keep the alert from ever firing.
+        window_seconds              = optional(number, 300)
         duration_seconds            = optional(number, 300)
         evaluation_interval_seconds = optional(number, 60)
         severity                    = optional(string, null)
@@ -929,5 +932,32 @@ variable "vertex_ai" {
   validation {
     condition     = var.vertex_ai.models == null ? true : length(var.vertex_ai.models) > 0
     error_message = "When set, models must list at least one model; use null to price every model in the table."
+  }
+
+  validation {
+    condition = var.vertex_ai.models == null ? true : alltrue([
+      for model_name in var.vertex_ai.models : contains(keys(var.vertex_ai.pricing), model_name)
+    ])
+    error_message = "Every entry of 'models' must name a model present in 'pricing'. A name that matches nothing would silently empty the cost estimate, removing every cost alert and every cost widget without an error."
+  }
+
+  validation {
+    condition = alltrue([
+      for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+      threshold.evaluation_interval_seconds > 0 && threshold.evaluation_interval_seconds % 30 == 0 &&
+      threshold.duration_seconds >= 0 && threshold.auto_close_seconds > 0
+    ])
+    error_message = "On a cost threshold, evaluation_interval_seconds must be a positive multiple of 30 (the Cloud Monitoring API rejects anything else at apply time), duration_seconds must not be negative and auto_close_seconds must be positive."
+  }
+
+  validation {
+    condition = (
+      var.vertex_ai.alerts.error_rate.evaluation_interval_seconds > 0 &&
+      var.vertex_ai.alerts.error_rate.evaluation_interval_seconds % 30 == 0 &&
+      var.vertex_ai.alerts.error_rate.duration_seconds >= 0 &&
+      var.vertex_ai.alerts.error_rate.auto_close_seconds > 0 &&
+      var.vertex_ai.alerts.error_rate.window_seconds >= 60
+    )
+    error_message = "On the error-rate alert, evaluation_interval_seconds must be a positive multiple of 30, duration_seconds must not be negative, auto_close_seconds must be positive and window_seconds must be at least 60."
   }
 }
