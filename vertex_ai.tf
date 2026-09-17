@@ -14,9 +14,13 @@
 locals {
   vertex_ai_project = var.vertex_ai.project_id != null ? var.vertex_ai.project_id : var.project_id
 
-  vertex_ai_notification_channels = var.vertex_ai.notification_enabled ? (
-    length(var.vertex_ai.notification_channels) > 0 ? var.vertex_ai.notification_channels : var.notification_channels
-  ) : []
+  # Service-level channels: the service list when set, otherwise the root one.
+  vertex_ai_service_channels = length(var.vertex_ai.notification_channels) > 0 ? var.vertex_ai.notification_channels : var.notification_channels
+
+  vertex_ai_notification_channels = var.vertex_ai.notification_enabled ? local.vertex_ai_service_channels : []
+
+  # Cost-family routing, declared once for every threshold of the family.
+  vertex_ai_cost_family_channels = var.vertex_ai.alerts.cost.notification_channels != null ? var.vertex_ai.alerts.cost.notification_channels : local.vertex_ai_service_channels
 
   # Metric names in one place. Every metric under publisher/online_serving is
   # still BETA, so an upstream rename is a single edit here rather than a hunt
@@ -138,9 +142,13 @@ locals {
     for name, threshold in var.vertex_ai.alerts.cost.thresholds :
     name => merge(threshold, {
       severity = threshold.severity != null ? upper(threshold.severity) : null
-      channels = threshold.notification_enabled == false ? [] : (
-        threshold.notification_channels != null ? threshold.notification_channels : local.vertex_ai_notification_channels
-      )
+      # Most specific wins: threshold, then cost family, then service, then root.
+      # Resolving to disabled yields an empty list, which is a silent check.
+      channels = coalesce(threshold.notification_enabled, var.vertex_ai.alerts.cost.notification_enabled, var.vertex_ai.notification_enabled) ? (
+        threshold.notification_channels != null ? threshold.notification_channels : local.vertex_ai_cost_family_channels
+      ) : []
+      prompts = threshold.notification_prompts != null ? threshold.notification_prompts : var.vertex_ai.alerts.cost.notification_prompts
+      silent  = coalesce(threshold.notification_enabled, var.vertex_ai.alerts.cost.notification_enabled, var.vertex_ai.notification_enabled) == false
     })
     if threshold.enabled
   } : {}
@@ -193,7 +201,17 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
 
   alert_strategy {
     auto_close           = "${each.value.auto_close_seconds}s"
-    notification_prompts = each.value.notification_prompts
+    notification_prompts = each.value.prompts
+  }
+
+  # An enabled alert with nowhere to send opens incidents nobody is told about.
+  # Silencing one on purpose is done with notification_enabled, not by leaving
+  # the channels empty.
+  lifecycle {
+    precondition {
+      condition     = each.value.silent || length(each.value.channels) > 0
+      error_message = "The Vertex AI cost threshold \"${each.key}\" resolves to no notification channel. Set notification_channels on the threshold, on alerts.cost, on the service or at the module root, or set notification_enabled = false to silence it on purpose."
+    }
   }
 }
 
@@ -252,5 +270,12 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   alert_strategy {
     auto_close           = "${var.vertex_ai.alerts.error_rate.auto_close_seconds}s"
     notification_prompts = var.vertex_ai.alerts.error_rate.notification_prompts
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.vertex_ai.alerts.error_rate.notification_enabled == false || length(local.vertex_ai_error_rate_channels) > 0
+      error_message = "The Vertex AI error-rate alert resolves to no notification channel. Set notification_channels on the alert, on the service or at the module root, or set notification_enabled = false to silence it on purpose."
+    }
   }
 }

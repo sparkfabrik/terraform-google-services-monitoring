@@ -258,20 +258,24 @@ module "example" {
 
     alerts = {
       cost = {
+        # Routing declared once: every threshold below inherits it.
+        notification_prompts = ["OPENED", "CLOSED"]
+
         thresholds = {
           daily_warning = {
             threshold_usd = 60
             severity      = "WARNING"
           }
           daily_critical = {
-            threshold_usd        = 100
-            severity             = "CRITICAL"
-            notification_prompts = ["OPENED", "CLOSED"]
+            threshold_usd = 100
+            severity      = "CRITICAL"
           }
+          # Overrides only the routing it needs; the rest stays inherited.
           hourly_spike = {
-            threshold_usd  = 20
-            window_seconds = 3600
-            severity       = "WARNING"
+            threshold_usd         = 20
+            window_seconds        = 3600
+            severity              = "WARNING"
+            notification_channels = ["low-urgency-channel"]
           }
         }
       }
