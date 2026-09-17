@@ -914,8 +914,10 @@ variable "vertex_ai" {
   validation {
     condition = alltrue([
       for name, threshold in var.vertex_ai.alerts.cost.thresholds :
-      (threshold.threshold_usd == null || threshold.threshold_usd > 0) &&
-      (threshold.window_seconds == null || threshold.window_seconds >= 60)
+      # coalesce, not a null guard with ||: Terraform evaluates both sides of ||,
+      # so comparing a null threshold_usd would fail before the guard is read.
+      coalesce(threshold.threshold_usd, 1) > 0 &&
+      coalesce(threshold.window_seconds, 86400) >= 60
     ])
     error_message = "A cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
   }
