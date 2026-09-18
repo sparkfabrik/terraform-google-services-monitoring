@@ -276,6 +276,20 @@ module "example" {
           }
         }
       }
+
+      # Shown with its defaults, because they are the part worth understanding.
+      # A share of 429 on its own is not a signal on a per-model grouping: with
+      # a handful of calls in the window, one failure reads as a huge
+      # percentage. min_invocations is the floor that makes the ratio mean
+      # something, and the window has to be wide enough to clear it often.
+      # Measure the resting 429 rate of your own workload before lowering
+      # threshold_ratio: on shared Gemini capacity a low background rate is
+      # normal, and a threshold under it alerts on healthy traffic.
+      error_rate = {
+        threshold_ratio = 0.05
+        min_invocations = 20
+        window_seconds  = 7200
+      }
     }
 
     # The module ships a price table for the models it already knows, in USD per

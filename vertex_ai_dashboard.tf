@@ -45,12 +45,15 @@ locals {
       text = {
         format = "MARKDOWN"
         content = join(" ", [
-          "**The cost figures on this dashboard are an estimate**, computed as tokens multiplied by the published list price and shown in USD.",
-          "Price table last checked on **${var.vertex_ai.pricing_verified_on}**.",
-          "This is not what you are invoiced: list prices carry no committed-use discount, no negotiated rate and no credit.",
-          "Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so no real-time figure exists.",
-          "The authoritative number is the BigQuery billing export, which is SKU-level and lags by about a day.",
-          "A model with traffic but no entry in the price table appears in the token widgets and contributes nothing here, and batch traffic is excluded from the estimate because it is billed at a different rate.",
+          "**The cost figures below are an upper bound at list price, not an invoice.**",
+          "They are token counts multiplied by the published list price, in USD. Price table last checked on **${var.vertex_ai.pricing_verified_on}**.",
+          "**They read high whenever context caching is working.**",
+          "Google bills a prompt token it served from its implicit cache at a tenth of the input price, but Cloud Monitoring reports cached and uncached prompt tokens under the same `input` type, so this dashboard charges all of them at the full rate and cannot tell them apart.",
+          "Implicit caching is on by default on recent Gemini models: where a third of the prompt tokens are cache reads, expect this figure to sit roughly 40% above the billed input cost.",
+          "The error is one-directional, so the real cost is never higher than what you see here for the traffic counted.",
+          "List prices also carry no committed-use discount, no negotiated rate and no credit, and batch traffic is left out entirely because it is billed at a different rate.",
+          "A model with traffic but no entry in the price table shows up in the token widgets and contributes nothing here.",
+          "**For the amount actually billed, and for the cached share as its own line, use the BigQuery billing export**, which is SKU-level and lags by about a day.",
         ])
       }
     }
@@ -253,8 +256,14 @@ locals {
     # error_category separates contention on a shared resource from a quota the
     # caller actually exhausted, which is the difference between a 429 you can
     # act on and one you cannot.
+    #
+    # Vertex leaves the label unset on a good share of real traffic, Gemini 429s
+    # included, and the chart is then empty. That is why the error-rate alert
+    # points at it as a hint rather than as the diagnosis, and why an empty chart
+    # here must not be read as "no errors": the response-code chart beside it is
+    # the one that always has data.
     error_category_chart = {
-      title = "Invocations by error category"
+      title = "Invocations by error category (label often unset)"
       xyChart = {
         dataSets = [{
           plotType   = "LINE"
@@ -352,27 +361,14 @@ locals {
       }
     }
 
-    # Cached input is an order of magnitude cheaper than uncached input, so this
-    # ratio is the cheapest cost lever available. The denominator carries every
-    # prompt token class, cache writes included: on partner models 'input'
-    # counts only the uncached tokens, so leaving the write classes out would
-    # report a cache share of 100% for a workload that is half cache writes.
-    # clamp_min keeps the widget from showing NaN when no prompt token was
-    # served at all in the window.
-    cache_share_scorecard = {
-      title = "Share of prompt tokens served from cache"
-      scorecard = {
-        timeSeriesQuery = {
-          prometheusQuery = join("", [
-            "(sum(increase({\"${local.vertex_ai_metrics.token_count}\", type=\"cache_read_input\"}[$${__interval}])) or on() vector(0))",
-            " / clamp_min(",
-            "(sum(increase({\"${local.vertex_ai_metrics.token_count}\", type=~\"input|cache_read_input|cache_write_input|cache_write_1h_input\"}[$${__interval}])) or on() vector(0))",
-            ", 1)",
-          ])
-          outputFullDuration = true
-        }
-      }
-    }
+    # There is deliberately no "share of prompt tokens served from cache" tile.
+    # It would have to read the 'cache_read_input' token type, which exists only
+    # on partner-model series and is zero unless the caller drives Anthropic
+    # prompt caching explicitly. Gemini's implicit cache reads never appear under
+    # any cache type: they are inside 'input'. A tile built that way therefore
+    # reads a steady 0% precisely when caching is working hardest, which is worse
+    # than showing nothing, and it was removed for that reason. The cached share
+    # is visible in the BigQuery billing export, on the "Text Input Caching" SKU.
   }
 
   # Rows are assembled first, then flattened into positioned tiles. Empty rows
@@ -382,15 +378,20 @@ locals {
   # conditional between two tuples: Terraform requires both arms of a ternary to
   # carry the same type, and a one-tile tuple is not the same type as an empty
   # one, so the ternary form fails to evaluate.
+  # The scorecard row holds four tiles with the cost one and three without, so
+  # the width has to follow: leaving it at 12 would end the row at 36 of the 48
+  # columns and leave a quarter of the row empty whenever cost_widgets is off.
+  vertex_ai_dashboard_scorecard_width = local.vertex_ai_dashboard_cost ? 12 : 16
+
   vertex_ai_dashboard_rows = [
     for row in [
       [for widget in [local.vertex_ai_dashboard_widgets.cost_note] : { width = 48, height = 4, widget = widget } if local.vertex_ai_dashboard_cost],
       concat(
-        [for widget in [local.vertex_ai_dashboard_widgets.cost_scorecard] : { width = 12, height = 8, widget = widget } if local.vertex_ai_dashboard_cost],
+        [for widget in [local.vertex_ai_dashboard_widgets.cost_scorecard] : { width = local.vertex_ai_dashboard_scorecard_width, height = 8, widget = widget } if local.vertex_ai_dashboard_cost],
         [
-          { width = 12, height = 8, widget = local.vertex_ai_dashboard_widgets.input_tokens_scorecard },
-          { width = 12, height = 8, widget = local.vertex_ai_dashboard_widgets.output_tokens_scorecard },
-          { width = 12, height = 8, widget = local.vertex_ai_dashboard_widgets.invocations_scorecard },
+          { width = local.vertex_ai_dashboard_scorecard_width, height = 8, widget = local.vertex_ai_dashboard_widgets.input_tokens_scorecard },
+          { width = local.vertex_ai_dashboard_scorecard_width, height = 8, widget = local.vertex_ai_dashboard_widgets.output_tokens_scorecard },
+          { width = local.vertex_ai_dashboard_scorecard_width, height = 8, widget = local.vertex_ai_dashboard_widgets.invocations_scorecard },
         ],
       ),
       [for widget in [local.vertex_ai_dashboard_widgets.cost_by_model_chart] : { width = 48, height = 16, widget = widget } if local.vertex_ai_dashboard_cost],
@@ -411,8 +412,7 @@ locals {
         { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.latency_p95_chart },
       ],
       [
-        { width = 24, height = 16, widget = local.vertex_ai_dashboard_widgets.ttft_chart },
-        { width = 24, height = 8, widget = local.vertex_ai_dashboard_widgets.cache_share_scorecard },
+        { width = 48, height = 16, widget = local.vertex_ai_dashboard_widgets.ttft_chart },
       ],
     ] : row if length(row) > 0
   ]

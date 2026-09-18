@@ -109,6 +109,30 @@ locals {
   # Every term carries 'or on() vector(0)'. A selector that matches no series
   # yields an empty vector, and an empty vector added to a number is empty, so
   # without the fallback a single idle model would blank the whole sum.
+  #
+  # THIS IS AN UPPER BOUND, NOT A PREDICTION OF THE INVOICE.
+  #
+  # Google bills a prompt token it served from its implicit context cache at a
+  # tenth of the input price, under a separate SKU ("... Text Input Caching").
+  # The metric does not make that distinction: for the 'google' publisher the
+  # 'type' label only ever takes the values 'input' and 'output', so cache reads
+  # are inside 'input' and this expression charges them at the full rate.
+  #
+  # Nothing in Cloud Monitoring exposes the split. The 'explicit_caching' label
+  # on this metric is only populated for the 'anthropic' publisher, and it marks
+  # the request rather than separating the tokens inside it. The cache token
+  # types this expression does emit for partner models (cache_read_input and the
+  # cache_write ones) have no counterpart on Gemini series, so adding such an
+  # entry to the price table of a Gemini model produces a term that matches
+  # nothing and silently evaluates to zero. Do not try to fix the overestimate
+  # that way.
+  #
+  # Measured against one production invoice, cache reads were about a third of
+  # the prompt tokens and the estimate landed roughly 40% above the billed input
+  # cost. The direction is guaranteed: the estimate is never below the list-price
+  # cost of the same traffic, so a threshold set on it fires early, never late.
+  # The authoritative figure remains the BigQuery billing export, where the
+  # cached share is a line of its own.
   vertex_ai_cost_expressions = {
     for window in local.vertex_ai_cost_windows :
     window => length(local.vertex_ai_cost_terms) == 0 ? "vector(0)" : format("(%s) / 1e6", join(" + ", [
@@ -138,17 +162,33 @@ locals {
   # at least one model carries a price (an expression that is constantly
   # vector(0) would never fire) and the threshold itself is enabled. The module
   # ships no threshold: the amount is a budget only the consumer knows.
+  # Most specific wins: threshold, then cost family, then service, then on.
+  # Written as a nested ternary rather than coalesce() because coalesce() with
+  # every argument null is a fatal error, not a fallback, and a consumer setting
+  # notification_enabled = null explicitly at each level is legal on an
+  # optional(bool) attribute. That would blow up here with a coalesce error
+  # instead of the precondition message written for exactly this case.
+  vertex_ai_cost_threshold_notify = {
+    for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+    name => (
+      threshold.notification_enabled != null ? threshold.notification_enabled : (
+        var.vertex_ai.alerts.cost.notification_enabled != null ? var.vertex_ai.alerts.cost.notification_enabled : (
+          var.vertex_ai.notification_enabled != null ? var.vertex_ai.notification_enabled : true
+        )
+      )
+    )
+  }
+
   vertex_ai_cost_alerts = var.vertex_ai.enabled && var.vertex_ai.alerts.cost.enabled && length(local.vertex_ai_cost_terms) > 0 ? {
     for name, threshold in var.vertex_ai.alerts.cost.thresholds :
     name => merge(threshold, {
       severity = threshold.severity != null ? upper(threshold.severity) : null
-      # Most specific wins: threshold, then cost family, then service, then root.
       # Resolving to disabled yields an empty list, which is a silent check.
-      channels = coalesce(threshold.notification_enabled, var.vertex_ai.alerts.cost.notification_enabled, var.vertex_ai.notification_enabled) ? (
+      channels = local.vertex_ai_cost_threshold_notify[name] ? (
         threshold.notification_channels != null ? threshold.notification_channels : local.vertex_ai_cost_family_channels
       ) : []
       prompts = threshold.notification_prompts != null ? threshold.notification_prompts : var.vertex_ai.alerts.cost.notification_prompts
-      silent  = coalesce(threshold.notification_enabled, var.vertex_ai.alerts.cost.notification_enabled, var.vertex_ai.notification_enabled) == false
+      silent  = local.vertex_ai_cost_threshold_notify[name] == false
     })
     if threshold.enabled
   } : {}
@@ -189,7 +229,9 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
     content   = <<-EOT
       Estimated Vertex AI spend over the last ${each.value.window_seconds}s crossed ${each.value.threshold_usd} USD.
 
-      **This is an estimate, not an invoice.** Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the figure is tokens multiplied by the published list price, in USD. It ignores committed-use discounts, negotiated rates and credits, and it excludes batch traffic. The authoritative number is the BigQuery billing export, which is SKU-level and about a day behind.
+      **This is an upper bound, not an invoice.** Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the figure is tokens multiplied by the published list price, in USD. It ignores committed-use discounts, negotiated rates and credits, and it excludes batch traffic.
+
+      **It also charges cached prompt tokens at full price.** Google bills a prompt token served from its implicit context cache at a tenth of the input rate, and the metric folds those tokens into the same `input` type as uncached ones, so they cannot be told apart here. Implicit caching is on by default on recent Gemini models: on a workload where a third of the prompt tokens were cache reads, this figure ran about 40% above the billed input cost. The overshoot is one-directional, so this alert fires early rather than late. The authoritative number is the BigQuery billing export, which is SKU-level, has a line of its own for the cached share, and lags by about a day.
 
       A model with traffic but no entry in the module price table contributes nothing here, so real spend can be higher than this alert sees. Compare the "Tokens by model" and "Estimated cost by model" charts on the Vertex AI dashboard: a model in the first and missing from the second has no price configured.
 
@@ -219,7 +261,15 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
 # Watches the share of invocations answered with a given response code rather
 # than their absolute count, which says nothing without the denominator. The
 # ratio and the grouping follow the alert template Google publishes for its own
-# Vertex AI dashboard samples.
+# Vertex AI dashboard samples; the invocation floor does not, and is there
+# because a bare ratio is unusable on a per-model grouping, where a model can
+# take single-digit calls in a window.
+#
+# The defaults trade detection latency for silence: a wide window and a floor
+# mean a model with little traffic is not watched at all, which is deliberate.
+# Narrowing the window without lowering the floor makes most windows ineligible
+# and the alert blind; lowering the floor without widening the window brings
+# back the one-failure-out-of-two false positive.
 #
 # On Gemini pay-as-you-go a 429 is contention on a shared resource and not an
 # exhausted project quota, so this alert dates a degradation; it does not point
@@ -235,8 +285,13 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   severity     = local.vertex_ai_error_rate_severity
 
   conditions {
-    display_name = "${var.vertex_ai.alerts.error_rate.response_code} share > ${var.vertex_ai.alerts.error_rate.threshold_ratio} per model"
+    display_name = "${var.vertex_ai.alerts.error_rate.response_code} share > ${var.vertex_ai.alerts.error_rate.threshold_ratio} per model, over at least ${var.vertex_ai.alerts.error_rate.min_invocations} invocations"
 
+    # The ratio alone is not a signal on a low-traffic model: one failed call out
+    # of three reads as 33%. The second clause is the volume floor, and 'and'
+    # matches it to the ratio on the same (model_user_id, location) pair, so a
+    # model is evaluated only once it has taken enough calls in the window for
+    # the percentage to mean something.
     condition_prometheus_query_language {
       query = join("", [
         "sum by (model_user_id, location)(rate({\"${local.vertex_ai_metrics.invocation_count}\", ",
@@ -246,6 +301,10 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
         "sum by (model_user_id, location)(rate({\"${local.vertex_ai_metrics.invocation_count}\"}",
         "[${var.vertex_ai.alerts.error_rate.window_seconds}s]))",
         " > ${var.vertex_ai.alerts.error_rate.threshold_ratio}",
+        " and ",
+        "sum by (model_user_id, location)(increase({\"${local.vertex_ai_metrics.invocation_count}\"}",
+        "[${var.vertex_ai.alerts.error_rate.window_seconds}s]))",
+        " >= ${var.vertex_ai.alerts.error_rate.min_invocations}",
       ])
       duration            = "${var.vertex_ai.alerts.error_rate.duration_seconds}s"
       evaluation_interval = "${var.vertex_ai.alerts.error_rate.evaluation_interval_seconds}s"
@@ -255,13 +314,15 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   documentation {
     mime_type = "text/markdown"
     content   = <<-EOT
-      More than ${var.vertex_ai.alerts.error_rate.threshold_ratio * 100}% of invocations to a Vertex AI model returned ${var.vertex_ai.alerts.error_rate.response_code}.
+      More than ${var.vertex_ai.alerts.error_rate.threshold_ratio * 100}% of the invocations of a single Vertex AI model returned ${var.vertex_ai.alerts.error_rate.response_code}, over a window of ${var.vertex_ai.alerts.error_rate.window_seconds}s in which that model took at least ${var.vertex_ai.alerts.error_rate.min_invocations} calls.
 
       **On a Gemini pay-as-you-go model a 429 is contention on a shared resource, not an exhausted project quota.** Those models have no per-project requests-per-minute limit, so there is no quota increase to request: the alert dates a degradation, it does not point at a fix. The caller should back off and retry.
 
       **On a partner model the reading is different**: those carry fixed per-region quotas, and a sustained 429 rate there can mean the quota is genuinely exhausted and worth raising.
 
-      The "Invocations by error category" chart on the Vertex AI dashboard separates the two cases: `capacity` is contention, `user` is a limit the caller crossed.
+      A low background rate of 429 is normal on shared capacity, which is what the threshold and the invocation floor are set against. If this alert opens on traffic nobody considers degraded, the threshold is under the resting rate of this workload rather than the workload being unhealthy: measure the resting rate before lowering it further.
+
+      The "Invocations by error category" chart on the Vertex AI dashboard tells contention from an exhausted limit, `capacity` against `user`, **when Vertex populates that label**. It is frequently unset on Gemini traffic, and the chart is then empty; that absence says nothing about the cause.
     EOT
   }
 
