@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.24.0] - 2026-09-17
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.23.0...0.24.0)
+
+### Added
+
+- `vertex_ai` service (disabled by default): a Cloud Monitoring dashboard for Vertex AI publisher-model consumption with an estimated cost per model, alert policies on consumer-declared estimated-cost thresholds, and an alert policy on the share of invocations answered with a given response code (429 by default). Setting `enabled = true` brings up the dashboard and the error-rate alert; the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own.
+- `vertex_ai.alerts.error_rate.min_invocations` (default 20): a floor on the denominator of the error-rate ratio, so a model is evaluated only once it has taken enough calls in the window for a percentage to mean something.
+- `vertex_ai.alerts.cost.notification_channels` and `vertex_ai.alerts.cost.notification_prompts`: routing declared once for the whole cost family, inherited by every threshold and overridable per threshold. Prompts default to notifying on both opening and closing, since a cost threshold falling back under its budget is as worth knowing as crossing it. Resolution runs threshold, then cost family, then service, then the module root, matching the Typesense services. An enabled alert that resolves to no channel is rejected at plan time; `notification_enabled = false` is how a check stays silent on purpose.
+- `vertex_ai.alerts.cost.thresholds`: named cost thresholds, each becoming its own alert policy so a warning and a critical raise distinguishable incidents. The module ships none: the amount is a budget only the consuming project knows. An entry set to `enabled = false` is silenced without being deleted.
+- `vertex_ai.pricing`: a hand-maintained price table shipped as a module default, keyed by model, token type and endpoint class, overridable per consumer, with `pricing_verified_on` shown on the dashboard. Cost is estimated as tokens multiplied by list price, in USD, because Vertex AI publishes no spend metric to Cloud Monitoring. The table must be reviewed periodically, and the README gives the Cloud Billing Catalog query that checks it.
+- The estimated cost is documented as an upper bound, on the dashboard, in the alert documentation and in the README. Cloud Monitoring reports prompt tokens served from Gemini's implicit context cache under the same `input` type as uncached ones, and Google bills them at a tenth of the input price, so the estimate charges them at the full rate and reads high whenever caching is working.
+
 ## [0.23.0] - 2026-08-19
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.22.0...0.23.0)

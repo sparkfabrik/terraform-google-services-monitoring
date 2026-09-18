@@ -61,3 +61,15 @@ output "typesense_workload_replicas_alert_policy_names" {
 output "typesense_dashboard_ids" {
   value = { for k, v in google_monitoring_dashboard.typesense_app : k => v.id }
 }
+
+output "vertex_ai_cost_alert_policy_names" {
+  value = { for k, v in google_monitoring_alert_policy.vertex_ai_cost : k => v.name }
+}
+
+output "vertex_ai_error_rate_alert_policy_name" {
+  value = one(google_monitoring_alert_policy.vertex_ai_error_rate[*].name)
+}
+
+output "vertex_ai_dashboard_id" {
+  value = one(google_monitoring_dashboard.vertex_ai[*].id)
+}
