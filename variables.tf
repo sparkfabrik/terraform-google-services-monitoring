@@ -1007,13 +1007,14 @@ variable "vertex_ai" {
   # input rate while global traffic is corrected.
   validation {
     condition = alltrue([
+      # coalesce() and not a null guard on the left of '||': HCL evaluates both
+      # sides, so keys(config.regional) runs even when regional is null. Falling
+      # back to the global table repeats a check that has already passed.
       for model_name, config in var.vertex_ai.pricing : (
         contains(keys(config.global), "input") &&
         contains(keys(config.global), "cache_read_input") &&
-        (
-          config.regional == null ||
-          (contains(keys(config.regional), "input") && contains(keys(config.regional), "cache_read_input"))
-        )
+        contains(keys(coalesce(config.regional, config.global)), "input") &&
+        contains(keys(coalesce(config.regional, config.global)), "cache_read_input")
       )
       if config.cached_input_share != null
     ])
