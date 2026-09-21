@@ -46,6 +46,47 @@ locals {
     if contains(var.vertex_ai.models, model_name)
   ])
 
+  # Effective price tables, after folding the assumed cache share into 'input'.
+  #
+  # A model that sets cached_input_share does not report its cache reads as a
+  # series of their own: they sit inside 'input'. Querying type="cache_read_input"
+  # for such a model matches nothing and silently costs zero, so the correction
+  # cannot be a second PromQL term. It is a blended price instead: the assumed
+  # share at the cache rate, the rest at the input rate, collapsed into one
+  # number. The generated query keeps exactly the shape it had.
+  #
+  # Dropping cache_read_input from the table afterwards is what keeps a dead term
+  # from being emitted, including when the share is set to 0 to turn the
+  # correction off. A model that leaves the share null is untouched, which is how
+  # the partner models keep pricing their real cache series.
+  vertex_ai_effective_pricing = {
+    for model_name in local.vertex_ai_priced_models :
+    model_name => {
+      for class_name, table in {
+        global   = var.vertex_ai.pricing[model_name].global
+        regional = var.vertex_ai.pricing[model_name].regional
+      } :
+      class_name => table == null ? null : (
+        var.vertex_ai.pricing[model_name].cached_input_share != null &&
+        contains(keys(table), "input") && contains(keys(table), "cache_read_input")
+        ? {
+          # Rounded: the blend is a float multiplication, and HCL renders the
+          # raw result with a long tail of digits that would be carried into
+          # every occurrence of the price inside the generated PromQL.
+          for token_type, price in table : token_type => (
+            token_type == "input"
+            ? tonumber(format("%.6f",
+              table["input"] * (1 - var.vertex_ai.pricing[model_name].cached_input_share)
+              + table["cache_read_input"] * var.vertex_ai.pricing[model_name].cached_input_share
+            ))
+            : price
+          ) if token_type != "cache_read_input"
+        }
+        : table
+      )
+    }
+  }
+
   # One term per (model, token type, endpoint class) that carries a price.
   # When a model has no regional table, or one identical to its global table,
   # the two classes collapse into a single term, which halves the generated
@@ -60,10 +101,10 @@ locals {
   vertex_ai_cost_terms_by_model = {
     for model_name in local.vertex_ai_priced_models :
     model_name => (
-      var.vertex_ai.pricing[model_name].regional == null ||
-      var.vertex_ai.pricing[model_name].regional == var.vertex_ai.pricing[model_name].global
+      local.vertex_ai_effective_pricing[model_name].regional == null ||
+      local.vertex_ai_effective_pricing[model_name].regional == local.vertex_ai_effective_pricing[model_name].global
       ? [
-        for token_type, price in var.vertex_ai.pricing[model_name].global : {
+        for token_type, price in local.vertex_ai_effective_pricing[model_name].global : {
           model           = model_name
           type            = token_type
           price           = price
@@ -72,7 +113,7 @@ locals {
       ]
       : concat(
         [
-          for token_type, price in var.vertex_ai.pricing[model_name].global : {
+          for token_type, price in local.vertex_ai_effective_pricing[model_name].global : {
             model           = model_name
             type            = token_type
             price           = price
@@ -80,7 +121,7 @@ locals {
           } if price > 0
         ],
         [
-          for token_type, price in var.vertex_ai.pricing[model_name].regional : {
+          for token_type, price in local.vertex_ai_effective_pricing[model_name].regional : {
             model           = model_name
             type            = token_type
             price           = price
@@ -110,29 +151,31 @@ locals {
   # yields an empty vector, and an empty vector added to a number is empty, so
   # without the fallback a single idle model would blank the whole sum.
   #
-  # THIS IS AN UPPER BOUND, NOT A PREDICTION OF THE INVOICE.
+  # THIS NUMBER CARRIES AN ASSUMPTION. READ cached_input_share BEFORE TRUSTING IT.
   #
   # Google bills a prompt token it served from its implicit context cache at a
   # tenth of the input price, under a separate SKU ("... Text Input Caching").
   # The metric does not make that distinction: for the 'google' publisher the
   # 'type' label only ever takes the values 'input' and 'output', so cache reads
-  # are inside 'input' and this expression charges them at the full rate.
+  # sit inside 'input' and nothing in Cloud Monitoring can separate them. The
+  # 'explicit_caching' label is populated only for the 'anthropic' publisher and
+  # marks the request, not the tokens inside it.
   #
-  # Nothing in Cloud Monitoring exposes the split. The 'explicit_caching' label
-  # on this metric is only populated for the 'anthropic' publisher, and it marks
-  # the request rather than separating the tokens inside it. The cache token
-  # types this expression does emit for partner models (cache_read_input and the
-  # cache_write ones) have no counterpart on Gemini series, so adding such an
-  # entry to the price table of a Gemini model produces a term that matches
-  # nothing and silently evaluates to zero. Do not try to fix the overestimate
-  # that way.
+  # Uncorrected, the estimate charges every prompt token at the full rate and
+  # reads high: measured against two production invoices, by 46% on a fortnight
+  # where 36.6% of the prompt tokens were cache reads, and by 33% on a month at
+  # 34.6%. That was an upper bound, wrong in one direction only, so an alert on
+  # it fired early and never late.
   #
-  # Measured against one production invoice, cache reads were about a third of
-  # the prompt tokens and the estimate landed roughly 40% above the billed input
-  # cost. The direction is guaranteed: the estimate is never below the list-price
-  # cost of the same traffic, so a threshold set on it fires early, never late.
-  # The authoritative figure remains the BigQuery billing export, where the
-  # cached share is a line of its own.
+  # cached_input_share trades that guarantee for accuracy. It folds an assumed
+  # cached fraction into the input price, which brings the estimate close to the
+  # invoice while the assumption holds, and makes it UNDERSTATE when the real
+  # share falls below the assumed one. An alert can then fire late. Whoever
+  # changes that share is choosing between the two failure modes.
+  #
+  # Either way the authoritative figure is the BigQuery billing export, where the
+  # cached share is a line of its own and is what the assumption should be
+  # re-measured against.
   vertex_ai_cost_expressions = {
     for window in local.vertex_ai_cost_windows :
     window => length(local.vertex_ai_cost_terms) == 0 ? "vector(0)" : format("(%s) / 1e6", join(" + ", [
@@ -229,9 +272,9 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
     content   = <<-EOT
       Estimated Vertex AI spend over the last ${each.value.window_seconds}s crossed ${each.value.threshold_usd} USD.
 
-      **This is an upper bound, not an invoice.** Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the figure is tokens multiplied by the published list price, in USD. It ignores committed-use discounts, negotiated rates and credits, and it excludes batch traffic.
+      **This is an estimate, not an invoice.** Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the figure is tokens multiplied by the published list price, in USD. It ignores committed-use discounts, negotiated rates and credits, and it excludes batch traffic.
 
-      **It also charges cached prompt tokens at full price.** Google bills a prompt token served from its implicit context cache at a tenth of the input rate, and the metric folds those tokens into the same `input` type as uncached ones, so they cannot be told apart here. Implicit caching is on by default on recent Gemini models: on a workload where a third of the prompt tokens were cache reads, this figure ran about 40% above the billed input cost. The overshoot is one-directional, so this alert fires early rather than late. The authoritative number is the BigQuery billing export, which is SKU-level, has a line of its own for the cached share, and lags by about a day.
+      **Part of it rests on an assumption.** Google bills a prompt token served from its implicit context cache at a tenth of the input rate, and the metric folds those tokens into the same `input` type as uncached ones, so they cannot be told apart here. The module works around that by pricing an assumed share of the prompt tokens at the caching rate, which keeps the figure close to the invoice while the assumption holds and makes it read low when the real share drops below it. **This alert can therefore fire late.** The assumed share is stated on the dashboard's first tile; re-measure it against the "Text Input Caching" line of the BigQuery billing export, which is also the authoritative number and lags by about a day.
 
       A model with traffic but no entry in the module price table contributes nothing here, so real spend can be higher than this alert sees. Compare the "Tokens by model" and "Estimated cost by model" charts on the Vertex AI dashboard: a model in the first and missing from the second has no price configured.
 

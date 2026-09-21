@@ -36,6 +36,31 @@ locals {
   vertex_ai_latency_filter    = "metric.type=\"${local.vertex_ai_metrics.invocation_latency}\" AND resource.type=\"${local.vertex_ai_publisher_resource}\""
   vertex_ai_ttft_filter       = "metric.type=\"${local.vertex_ai_metrics.first_token_latency}\" AND resource.type=\"${local.vertex_ai_publisher_resource}\""
 
+  # The cache assumption has to be readable on the dashboard, with its value in
+  # plain sight: it is the one input to the cost figure that is not measured.
+  # Shares that all agree collapse into one sentence; a mixed set names each
+  # model, because an average would hide exactly what the reader needs.
+  vertex_ai_applied_shares = {
+    for model_name in local.vertex_ai_priced_models :
+    model_name => var.vertex_ai.pricing[model_name].cached_input_share
+    if var.vertex_ai.pricing[model_name].cached_input_share != null && var.vertex_ai.pricing[model_name].cached_input_share > 0
+  }
+
+  vertex_ai_cache_note = length(local.vertex_ai_applied_shares) == 0 ? join(" ", [
+    "No cache correction is applied, so this is an **upper bound**:",
+    "cached prompt tokens are charged at the full input rate.",
+    ]) : (
+    length(distinct(values(local.vertex_ai_applied_shares))) == 1 ? join(" ", [
+      "**Corrected with an assumption:** ${format("%.0f", values(local.vertex_ai_applied_shares)[0] * 100)}% of prompt tokens are taken to be cache reads",
+      "and priced at the caching rate, on ${length(local.vertex_ai_applied_shares)} of the priced models.",
+      "If the real share is lower than that, this figure reads **under** the invoice.",
+      ]) : join(" ", [
+      "**Corrected with a per-model assumption** on the cached share:",
+      join(", ", [for m, s in local.vertex_ai_applied_shares : "${m} ${format("%.0f", s * 100)}%"]),
+      ". Where the real share is lower, this figure reads **under** the invoice.",
+    ])
+  )
+
   vertex_ai_dashboard_widgets = {
     # The Widget object has no description field, only a title, so the caveat
     # that makes the two cost tiles readable has to be its own text widget.
@@ -45,15 +70,13 @@ locals {
       text = {
         format = "MARKDOWN"
         content = join(" ", [
-          "**The cost figures below are an upper bound at list price, not an invoice.**",
+          "**The cost figures below are an estimate at list price, not an invoice.**",
           "They are token counts multiplied by the published list price, in USD. Price table last checked on **${var.vertex_ai.pricing_verified_on}**.",
-          "**They read high whenever context caching is working.**",
-          "Google bills a prompt token it served from its implicit cache at a tenth of the input price, but Cloud Monitoring reports cached and uncached prompt tokens under the same `input` type, so this dashboard charges all of them at the full rate and cannot tell them apart.",
-          "Implicit caching is on by default on recent Gemini models: where a third of the prompt tokens are cache reads, expect this figure to sit roughly 40% above the billed input cost.",
-          "The error is one-directional, so the real cost is never higher than what you see here for the traffic counted.",
+          local.vertex_ai_cache_note,
+          "The reason an assumption is needed at all: Google bills a prompt token served from its implicit cache at a tenth of the input price, but Cloud Monitoring reports cached and uncached prompt tokens under the same `input` type and offers no way to separate them.",
           "List prices also carry no committed-use discount, no negotiated rate and no credit, and batch traffic is left out entirely because it is billed at a different rate.",
           "A model with traffic but no entry in the price table shows up in the token widgets and contributes nothing here.",
-          "**For the amount actually billed, and for the cached share as its own line, use the BigQuery billing export**, which is SKU-level and lags by about a day.",
+          "**For the amount actually billed, and for the cached share as its own line, use the BigQuery billing export**, which is SKU-level and lags by about a day. That is also where the assumed share should be re-measured.",
         ])
       }
     }

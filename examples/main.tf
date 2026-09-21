@@ -256,6 +256,7 @@ module "example" {
   vertex_ai = {
     enabled = true
 
+
     alerts = {
       cost = {
         thresholds = {
@@ -295,10 +296,18 @@ module "example" {
     # The module ships a price table for the models it already knows, in USD per
     # million tokens. Override it only for a price the module does not carry yet
     # or a negotiated rate, and move pricing_verified_on with it.
+    #
+    # cached_input_share is the one entry that is not a published price: it is
+    # the fraction of prompt tokens assumed to be cache reads, which Cloud
+    # Monitoring cannot separate from the rest. Re-measure it against the "Text
+    # Input Caching" line of your billing export. Too high and the estimate reads
+    # under the invoice, which makes a cost alert fire late; 0 gives back a
+    # figure that can only overshoot.
     # pricing = {
     #   "gemini-3.5-flash" = {
-    #     global   = { input = 1.50, output = 9.00 }
-    #     regional = { input = 1.65, output = 9.90 }
+    #     global             = { input = 1.50, output = 9.00, cache_read_input = 0.15 }
+    #     regional           = { input = 1.65, output = 9.90, cache_read_input = 0.165 }
+    #     cached_input_share = 0.30
     #   }
     # }
   }

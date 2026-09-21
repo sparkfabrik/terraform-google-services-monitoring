@@ -740,7 +740,7 @@ variable "gke_node_count" {
 }
 
 variable "vertex_ai" {
-  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. Read that estimate as an upper bound rather than a prediction: Google bills prompt tokens it served from its implicit context cache at a tenth of the input price, and the metric folds them into the same 'input' token type as uncached ones, so the estimate charges every prompt token at the full rate. Implicit caching is on by default on recent Gemini models, and on a production workload measured against its invoice roughly a third of the prompt tokens were cache reads, which put the estimate about 40% above the billed input cost. Nothing in Cloud Monitoring exposes the split, so the module cannot correct for it and does not try. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. Batch traffic is excluded from the estimate altogether: the metric reports it with a 'batch_' prefix on its 'source' label and it is billed at a different rate, so costing it with the online prices would be wrong in both directions. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the map key is the policy identity, so renaming a threshold destroys and recreates its policy and loses its incident history; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations of a single model answered with a given response code, 429 by default, and only once that model saw at least 'min_invocations' calls in the window: without that floor a model taking a handful of calls trips the alert on one failure, since one call in three is already 33%. Note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert dates a degradation and has no quota increase as a remedy. Notification routing resolves from the most specific setting to the least: the threshold, then the cost family, then the service, then the root 'notification_channels'. Declare the channels and the prompts once on 'alerts.cost' and a threshold overrides them only when it needs something different. The same chain applies to 'notification_enabled': resolving to false creates the policy with no channels, which is how a check stays silent on purpose. An enabled alert that resolves to no channels at all is rejected at plan time, because it would open incidents nobody is told about. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
+  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. One part of that estimate is assumed rather than measured. Google bills prompt tokens it served from its implicit context cache at a tenth of the input price, and the metric folds them into the same 'input' token type as uncached ones, so nothing in Cloud Monitoring can separate them. 'cached_input_share' names, per model, the fraction taken to be cache reads: that fraction is valued at the caching rate and the rest at the input rate, blended into one effective input price. Uncorrected the estimate only ever overshoots, so a cost alert fires early and never late; corrected it tracks the invoice closely while the assumption holds and reads under it when the real share falls below the assumed one, which makes the same alert fire late. Set a share to 0 to get the upper-bound behaviour back, and re-measure it against the 'Text Input Caching' line of the billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. Batch traffic is excluded from the estimate altogether: the metric reports it with a 'batch_' prefix on its 'source' label and it is billed at a different rate, so costing it with the online prices would be wrong in both directions. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the map key is the policy identity, so renaming a threshold destroys and recreates its policy and loses its incident history; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations of a single model answered with a given response code, 429 by default, and only once that model saw at least 'min_invocations' calls in the window: without that floor a model taking a handful of calls trips the alert on one failure, since one call in three is already 33%. Note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert dates a degradation and has no quota increase as a remedy. Notification routing resolves from the most specific setting to the least: the threshold, then the cost family, then the service, then the root 'notification_channels'. Declare the channels and the prompts once on 'alerts.cost' and a threshold overrides them only when it needs something different. The same chain applies to 'notification_enabled': resolving to false creates the policy with no channels, which is how a check stays silent on purpose. An enabled alert that resolves to no channels at all is rejected at plan time, because it would open incidents nobody is told about. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
   default     = {}
   type = object({
     enabled               = optional(bool, false)
@@ -801,12 +801,14 @@ variable "vertex_ai" {
     # The published values are rounded, so the regional table holds them verbatim
     # instead of applying a multiplier.
     #
-    # The cache_* token types below are real SKUs and real metric series, but
-    # only for partner models. Google bills its own cached prompt tokens at 10%
-    # of input under a "Text Input Caching" SKU, and the metric does not expose
-    # them as a separate type: adding a cache_* entry to a Gemini model here
-    # produces a PromQL term that matches no series and silently costs zero. See
-    # the note on the cost expression in vertex_ai.tf.
+    # The cache_* types mean two different things in this table, depending on the
+    # vendor. On partner models they are real metric series and are priced as
+    # their own PromQL term, which is a measurement. On Gemini no such series
+    # exists, so 'cache_read_input' here is not queried: it is the rate that
+    # 'cached_input_share' values the assumed cached fraction at, folded into the
+    # input price. That is why a Gemini entry carries cache_read_input and no
+    # cache_write rows, and why removing it while a share is set is rejected at
+    # plan time. See the note on the cost expression in vertex_ai.tf.
     #
     # Every Gemini and embedding row re-checked against the Cloud Billing Catalog
     # on 2026-09-21, all matching exactly. The Claude rows are NOT catalog-backed:
@@ -816,16 +818,34 @@ variable "vertex_ai" {
     # SKU ids to diff a Gemini price against:
     #   gemini-3.5-flash       global  input 9733-FF95-45E3, output 4E73-15BD-0D78
     #   gemini-3-flash-preview global  input 7EBE-3B46-F75C, output 0127-F0B7-365E
+    # 'cached_input_share' is the assumed fraction of prompt tokens the provider
+    # served from its implicit cache, and it is THE ONE NUMBER IN THIS TABLE THAT
+    # IS NOT A PUBLISHED PRICE. Setting it (even to 0) declares that this model
+    # does not report cache reads as a series of their own: the share is valued
+    # at 'cache_read_input' and the rest at 'input', blended into one effective
+    # input price, and no separate cache term is emitted. Leaving it out declares
+    # the opposite, which is what the partner models need: they do report those
+    # tokens, so pricing them is a measurement rather than a guess.
+    #
+    # The 0.30 shipped on the Gemini rows came from two reconciliations of one
+    # production project, which measured 34.6% over 30 days and 36.6% over 14.
+    # It brings the estimate within about 9% of that invoice, against 46%
+    # uncorrected. It is a property of a workload and not a constant: re-measure
+    # it from the "Text Input Caching" SKU of your own billing export and move
+    # it. Set it to 0 to go back to a figure that can only overshoot.
     pricing = optional(map(object({
-      global   = map(number)
-      regional = optional(map(number), null)
+      global             = map(number)
+      regional           = optional(map(number), null)
+      cached_input_share = optional(number, null)
       })), {
       "gemini-3.5-flash" = {
-        global   = { input = 1.50, output = 9.00 }
-        regional = { input = 1.65, output = 9.90 }
+        global             = { input = 1.50, output = 9.00, cache_read_input = 0.15 }
+        regional           = { input = 1.65, output = 9.90, cache_read_input = 0.165 }
+        cached_input_share = 0.30
       }
       "gemini-3-flash-preview" = {
-        global = { input = 0.50, output = 3.00 }
+        global             = { input = 0.50, output = 3.00, cache_read_input = 0.05 }
+        cached_input_share = 0.30
       }
       # Carried at list price, like every other row. This entry previously held
       # an introductory rate of half these values with a note saying it expired
@@ -837,8 +857,9 @@ variable "vertex_ai" {
       # lands as a credit on the "Other savings" column, not as a lower list
       # price. This table prices at list, so the estimate does not see it.
       "gemini-3.7-flash" = {
-        global   = { input = 1.50, output = 7.50 }
-        regional = { input = 1.65, output = 8.25 }
+        global             = { input = 1.50, output = 7.50, cache_read_input = 0.15 }
+        regional           = { input = 1.65, output = 8.25, cache_read_input = 0.165 }
+        cached_input_share = 0.30
       }
       # Served only from single regions: the live 'source' label is a region name
       # such as us-central1 or europe-west8, never 'global'. No regional column is
@@ -1022,6 +1043,27 @@ variable "vertex_ai" {
       floor(var.vertex_ai.alerts.error_rate.min_invocations) == var.vertex_ai.alerts.error_rate.min_invocations
     )
     error_message = "The error_rate min_invocations is a count of invocations and must be a whole number of zero or more; 0 disables the volume floor and lets a single failed call trip the ratio."
+  }
+
+  validation {
+    condition = alltrue([
+      for model_name, config in var.vertex_ai.pricing :
+      config.cached_input_share >= 0 && config.cached_input_share < 1
+      if config.cached_input_share != null
+    ])
+    error_message = "A 'cached_input_share' is a fraction of the prompt tokens and must be at least 0 and below 1; leave it out entirely for a model that reports its cache reads as a series of their own."
+  }
+
+  # A share needs a rate to value the cached fraction at. Without one the entry
+  # would be accepted, do nothing, and leave the estimate uncorrected with no
+  # symptom at all, which is the failure mode this service keeps running into.
+  validation {
+    condition = alltrue([
+      for model_name, config in var.vertex_ai.pricing :
+      contains(keys(config.global), "cache_read_input")
+      if config.cached_input_share != null
+    ])
+    error_message = "A model that sets 'cached_input_share' must also carry a 'cache_read_input' price in its global table: that is the rate the assumed cached fraction is valued at, and without it the correction would silently do nothing."
   }
 
   validation {
