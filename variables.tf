@@ -752,7 +752,7 @@ variable "vertex_ai" {
     # Date the price table was last checked against the published list, shown on
     # the dashboard next to the estimate. Override it together with 'pricing':
     # a project that supplies its own prices owns its own verification date.
-    pricing_verified_on = optional(string, "2026-09-18")
+    pricing_verified_on = optional(string, "2026-09-21")
 
     # USD per 1M tokens, keyed by the metric's 'type' label value.
     #
@@ -762,9 +762,8 @@ variable "vertex_ai" {
     # price produces a confident wrong cost with no error and no visible symptom.
     # Put the review on a recurring issue rather than on a trigger.
     #
-    # CHECK IT AGAINST THE CLOUD BILLING CATALOG, WHICH IS PUBLIC AND NEEDS NO
-    # BILLING PERMISSION. Every number below is a list price published there, so
-    # the whole table is verifiable in one command:
+    # GOOGLE'S OWN MODELS ARE CHECKABLE AGAINST THE CLOUD BILLING CATALOG, which
+    # is public and needs no billing permission:
     #
     #   TOKEN=$(gcloud auth print-access-token)
     #   curl -s -H "Authorization: Bearer $TOKEN" \
@@ -772,14 +771,18 @@ variable "vertex_ai" {
     #   | jq -r '.skus[] | select(.description | test("Gemini 3.5 Flash Global Text"))
     #            | "\(.description)\t\(.pricingInfo[-1].pricingExpression.tieredRates[-1].unitPrice.nanos/1000) USD/1M"'
     #
-    # Swap the test() pattern for the model you are checking. The services to
-    # query differ by vendor, which is the part that is easy to get wrong:
-    #   C7E2-9256-1C43  Vertex AI      Gemini and the embedding models
-    #   EC6A-CCB9-60E9  Claude Sonnet 4.6
-    #   BD63-1A21-A8FA  Claude Sonnet 5
-    # Partner models are NOT under the Vertex AI service: searching the 8.8k
-    # Vertex SKUs for "claude" returns nothing, which reads like "no SKU exists"
-    # and is how this table was once documented. They are their own services.
+    # Swap the test() pattern for the model. C7E2-9256-1C43 is the Vertex AI
+    # service and covers Gemini plus the embedding models.
+    #
+    # PARTNER MODELS ARE NOT IN THE CATALOG AND THAT COMMAND CANNOT CHECK THEM.
+    # Searching the 8.8k Vertex SKUs for "claude" returns nothing, and so does a
+    # scan of all 1.7k catalog services: none mentions Claude, Anthropic or
+    # Sonnet. On an invoice those models bill under services of their own, with
+    # ids like EC6A-CCB9-60E9 and BD63-1A21-A8FA, but those ids live only in
+    # billing data and the Catalog API returns no SKUs for them. Check a partner
+    # model against the published pricing page, or against your own billing
+    # export. The cache prices below are the least verifiable of all: they reach
+    # an invoice only once someone actually drives Anthropic prompt caching.
     #
     # Read only the "- Predictions" SKUs. The same model also publishes Off-Peak
     # and Flex rows at half price and Priority rows at 1.8x: this table prices
@@ -805,8 +808,12 @@ variable "vertex_ai" {
     # produces a PromQL term that matches no series and silently costs zero. See
     # the note on the cost expression in vertex_ai.tf.
     #
-    # Verified against the Cloud Billing Catalog on 2026-09-18. SKU ids to diff
-    # a Gemini price against:
+    # Every Gemini and embedding row re-checked against the Cloud Billing Catalog
+    # on 2026-09-21, all matching exactly. The Claude rows are NOT catalog-backed:
+    # input and output were last confirmed against a real invoice on 2026-09-18,
+    # and the cache rows come from the published pricing page alone.
+    #
+    # SKU ids to diff a Gemini price against:
     #   gemini-3.5-flash       global  input 9733-FF95-45E3, output 4E73-15BD-0D78
     #   gemini-3-flash-preview global  input 7EBE-3B46-F75C, output 0127-F0B7-365E
     pricing = optional(map(object({
