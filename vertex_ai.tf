@@ -1,15 +1,12 @@
 # Vertex AI consumption and estimated-cost observability.
 #
-# Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so
-# cost is estimated as tokens times list price. The estimate lives here, next to
-# the alerts, and is reused verbatim by the dashboard: a single source for the
-# expression is what keeps the number on the dashboard and the number that trips
-# an alert from drifting apart.
+# Cloud Monitoring carries Vertex AI token counts and no spend metric, so cost is
+# estimated as tokens times list price. The expression is built here and reused by
+# the dashboard, so both show the same number.
 #
-# Everything this service reads is a Google Cloud system metric, which is not
-# chargeable to ingest and does not consume the metrics free tier. The service
-# deliberately creates no log-based and no custom metric, so running it costs
-# nothing.
+# Every metric read is a Google Cloud system metric: not chargeable to ingest and
+# outside the metrics free tier. The service creates no log-based and no custom
+# metric.
 
 locals {
   vertex_ai_project = var.vertex_ai.project_id != null ? var.vertex_ai.project_id : var.project_id
@@ -17,14 +14,10 @@ locals {
   # Service-level channels: the service list when set, otherwise the root one.
   vertex_ai_service_channels = length(var.vertex_ai.notification_channels) > 0 ? var.vertex_ai.notification_channels : var.notification_channels
 
-  vertex_ai_notification_channels = var.vertex_ai.notification_enabled ? local.vertex_ai_service_channels : []
-
   # Cost-family routing, declared once for every threshold of the family.
   vertex_ai_cost_family_channels = var.vertex_ai.alerts.cost.notification_channels != null ? var.vertex_ai.alerts.cost.notification_channels : local.vertex_ai_service_channels
 
-  # Metric names in one place. Every metric under publisher/online_serving is
-  # still BETA, so an upstream rename is a single edit here rather than a hunt
-  # through the widgets and the alert queries.
+  # Metric names, in one place. All of them are BETA.
   vertex_ai_metrics = {
     token_count         = "aiplatform.googleapis.com/publisher/online_serving/token_count"
     token_throughput    = "aiplatform.googleapis.com/publisher/online_serving/consumed_token_throughput"
@@ -33,32 +26,24 @@ locals {
     first_token_latency = "aiplatform.googleapis.com/publisher/online_serving/first_token_latencies"
   }
 
-  # The resource labels reported by the Monitoring API and the ones listed in
-  # the published resource descriptor disagree on how the project is named, so
-  # no filter selects it: a dashboard and an alert policy are already scoped to
-  # the project that owns them.
+  # Monitored resource of every metric above. Its project label is not filterable:
+  # the API and the published descriptor name it differently. Scope comes from the
+  # project that owns the dashboard or the policy.
   vertex_ai_publisher_resource = "aiplatform.googleapis.com/PublisherModel"
 
-  # Models entering the cost estimate. Only priced models can be estimated;
-  # 'models' narrows that set further when a project wants a subset.
+  # Models entering the cost estimate: the priced ones, narrowed by 'models'.
   vertex_ai_priced_models = var.vertex_ai.models == null ? sort(keys(var.vertex_ai.pricing)) : sort([
     for model_name in keys(var.vertex_ai.pricing) : model_name
     if contains(var.vertex_ai.models, model_name)
   ])
 
-  # Effective price tables, after folding the assumed cache share into 'input'.
+  # Price tables with the assumed cache share folded into 'input'.
   #
-  # A model that sets cached_input_share does not report its cache reads as a
-  # series of their own: they sit inside 'input'. Querying type="cache_read_input"
-  # for such a model matches nothing and silently costs zero, so the correction
-  # cannot be a second PromQL term. It is a blended price instead: the assumed
-  # share at the cache rate, the rest at the input rate, collapsed into one
-  # number. The generated query keeps exactly the shape it had.
-  #
-  # Dropping cache_read_input from the table afterwards is what keeps a dead term
-  # from being emitted, including when the share is set to 0 to turn the
-  # correction off. A model that leaves the share null is untouched, which is how
-  # the partner models keep pricing their real cache series.
+  # Models that set cached_input_share report their cache reads inside 'input' and
+  # have no cache_read_input series. The share is valued at cache_read_input, the
+  # rest at input, and the two collapse into one effective input price;
+  # cache_read_input is then dropped so no term queries a missing series. Models
+  # that leave the share null keep their table unchanged.
   vertex_ai_effective_pricing = {
     for model_name in local.vertex_ai_priced_models :
     model_name => {
@@ -70,9 +55,8 @@ locals {
         var.vertex_ai.pricing[model_name].cached_input_share != null &&
         contains(keys(table), "input") && contains(keys(table), "cache_read_input")
         ? {
-          # Rounded: the blend is a float multiplication, and HCL renders the
-          # raw result with a long tail of digits that would be carried into
-          # every occurrence of the price inside the generated PromQL.
+          # Rounded: the raw product carries a long tail of digits into every
+          # occurrence of the price in the generated PromQL.
           for token_type, price in table : token_type => (
             token_type == "input"
             ? tonumber(format("%.6f",
@@ -87,17 +71,13 @@ locals {
     }
   }
 
-  # One term per (model, token type, endpoint class) that carries a price.
-  # When a model has no regional table, or one identical to its global table,
-  # the two classes collapse into a single term, which halves the generated
-  # expression for the common case.
+  # One term per (model, token type, endpoint class) priced above zero. A model
+  # whose regional table is absent or equal to the global one gets one term per
+  # type instead of two.
   #
-  # Batch traffic is excluded everywhere. The metric reports it with a 'batch_'
-  # prefix on 'source' ("batch_global", "batch_<region>"), it is billed at a
-  # different rate from online, and without the exclusion it would fall on the
-  # wrong side of the global/regional split and be costed at the regional price.
-  # 'source="global"' already excludes "batch_global" on its own; the other two
-  # selectors need the exclusion written out.
+  # Batch traffic is out of every selector: the metric prefixes its 'source' with
+  # 'batch_' and it is billed at a different rate. 'source="global"' excludes
+  # "batch_global" on its own.
   vertex_ai_cost_terms_by_model = {
     for model_name in local.vertex_ai_priced_models :
     model_name => (
@@ -134,83 +114,51 @@ locals {
 
   vertex_ai_cost_terms = flatten(values(local.vertex_ai_cost_terms_by_model))
 
-  # Range-vector windows the cost expression has to be rendered for: the
-  # dashboard follows the time-range picker through ${__interval}, each alert
-  # threshold pins its own fixed window because ${__interval} has no meaning
-  # outside a dashboard widget.
+  # Windows the cost expression is rendered for: ${__interval} for the dashboard,
+  # which follows its time-range picker, plus one fixed window per alert threshold.
+  # ${__interval} has no meaning outside a widget.
   vertex_ai_cost_windows = toset(concat(
     ["$${__interval}"],
     [for name, threshold in var.vertex_ai.alerts.cost.thresholds : "${threshold.window_seconds}s"],
   ))
 
   # PromQL is the only generally available way to multiply a series by a price:
-  # timeSeriesFilter has no scalar multiplier, timeSeriesFilterRatio only
-  # divides two series, and MQL has been deprecated since 2025-07-22.
+  # timeSeriesFilter has no scalar multiplier, timeSeriesFilterRatio only divides
+  # two series, MQL is deprecated since 2025-07-22.
   #
-  # Every term carries 'or on() vector(0)'. A selector that matches no series
-  # yields an empty vector, and an empty vector added to a number is empty, so
-  # without the fallback a single idle model would blank the whole sum.
+  # 'or on() vector(0)' on every term: a selector matching no series yields an
+  # empty vector, and an empty vector added to a number is empty.
   #
-  # THIS NUMBER CARRIES AN ASSUMPTION. READ cached_input_share BEFORE TRUSTING IT.
-  #
-  # Google bills a prompt token it served from its implicit context cache at a
-  # tenth of the input price, under a separate SKU ("... Text Input Caching").
-  # The metric does not make that distinction: for the 'google' publisher the
-  # 'type' label only ever takes the values 'input' and 'output', so cache reads
-  # sit inside 'input' and nothing in Cloud Monitoring can separate them. The
-  # 'explicit_caching' label is populated only for the 'anthropic' publisher and
-  # marks the request, not the tokens inside it.
-  #
-  # Uncorrected, the estimate charges every prompt token at the full rate and
-  # reads high: measured against two production invoices, by 46% on a fortnight
-  # where 36.6% of the prompt tokens were cache reads, and by 33% on a month at
-  # 34.6%. That was an upper bound, wrong in one direction only, so an alert on
-  # it fired early and never late.
-  #
-  # cached_input_share trades that guarantee for accuracy. It folds an assumed
-  # cached fraction into the input price, which brings the estimate close to the
-  # invoice while the assumption holds, and makes it UNDERSTATE when the real
-  # share falls below the assumed one. An alert can then fire late. Whoever
-  # changes that share is choosing between the two failure modes.
-  #
-  # Either way the authoritative figure is the BigQuery billing export, where the
-  # cached share is a line of its own and is what the assumption should be
-  # re-measured against.
+  # The input price of a model with cached_input_share is a blend, not a list
+  # price, so this figure reads under the invoice whenever the real cached share
+  # is below the assumed one. See cached_input_share in variables.tf.
   vertex_ai_cost_expressions = {
     for window in local.vertex_ai_cost_windows :
     window => length(local.vertex_ai_cost_terms) == 0 ? "vector(0)" : format("(%s) / 1e6", join(" + ", [
       for term in local.vertex_ai_cost_terms :
       format(
-        "(sum(increase({\"%s\", model_user_id=\"%s\", type=\"%s\"%s}[%s])) or on() vector(0)) * %s",
-        local.vertex_ai_metrics.token_count, term.model, term.type, term.source_selector, window, term.price,
+        "(sum(increase({\"%s\", model_user_id=%s, type=%s%s}[%s])) or on() vector(0)) * %s",
+        local.vertex_ai_metrics.token_count, jsonencode(term.model), jsonencode(term.type), term.source_selector, window, term.price,
       )
     ]))
   }
 
-  # Per-model expression, for the cost breakdown chart. Always rendered on the
-  # dashboard window.
+  # Per-model expression for the cost breakdown chart, on the dashboard window.
   vertex_ai_cost_expressions_by_model = {
     for model_name, terms in local.vertex_ai_cost_terms_by_model :
     model_name => format("(%s) / 1e6", join(" + ", [
       for term in terms :
       format(
-        "(sum(increase({\"%s\", model_user_id=\"%s\", type=\"%s\"%s}[$${__interval}])) or on() vector(0)) * %s",
-        local.vertex_ai_metrics.token_count, term.model, term.type, term.source_selector, term.price,
+        "(sum(increase({\"%s\", model_user_id=%s, type=%s%s}[$${__interval}])) or on() vector(0)) * %s",
+        local.vertex_ai_metrics.token_count, jsonencode(term.model), jsonencode(term.type), term.source_selector, term.price,
       )
     ]))
     if length(terms) > 0
   }
 
-  # A threshold materialises only when the service and the cost family are on,
-  # at least one model carries a price (an expression that is constantly
-  # vector(0) would never fire) and the threshold itself is enabled. The module
-  # ships no threshold: the amount is a budget only the consumer knows.
-  # Most specific wins: threshold, then cost family, then service, then on.
-  # Written as a nested ternary rather than coalesce() because coalesce() with
-  # every argument null is a fatal error, not a fallback, and a consumer setting
-  # notification_enabled = null explicitly at each level is legal on an
-  # optional(bool) attribute. That would blow up here with a coalesce error
-  # instead of the precondition message written for exactly this case.
+  # Notification switch per threshold: threshold, then cost family, then service,
+  # then on. A nested ternary rather than coalesce(), which is fatal when every
+  # argument is null and null is a legal value at each level here.
   vertex_ai_cost_threshold_notify = {
     for name, threshold in var.vertex_ai.alerts.cost.thresholds :
     name => (
@@ -239,15 +187,26 @@ locals {
   vertex_ai_error_rate_enabled  = var.vertex_ai.enabled && var.vertex_ai.alerts.error_rate.enabled
   vertex_ai_error_rate_severity = var.vertex_ai.alerts.error_rate.severity != null ? upper(var.vertex_ai.alerts.error_rate.severity) : null
 
-  vertex_ai_error_rate_channels = var.vertex_ai.alerts.error_rate.notification_enabled == false ? [] : (
-    var.vertex_ai.alerts.error_rate.notification_channels != null ? var.vertex_ai.alerts.error_rate.notification_channels : local.vertex_ai_notification_channels
+  # Same chain as the cost thresholds, minus the family level: alert, then
+  # service, then on. Resolved once and used both to pick the channels and to ask
+  # the precondition, so an inherited silence does not fail the check and an
+  # alert-level true overrides a service-level false.
+  vertex_ai_error_rate_notify = (
+    var.vertex_ai.alerts.error_rate.notification_enabled != null
+    ? var.vertex_ai.alerts.error_rate.notification_enabled
+    : (var.vertex_ai.notification_enabled != null ? var.vertex_ai.notification_enabled : true)
   )
+
+  vertex_ai_error_rate_channels = local.vertex_ai_error_rate_notify ? (
+    var.vertex_ai.alerts.error_rate.notification_channels != null ? var.vertex_ai.alerts.error_rate.notification_channels : local.vertex_ai_service_channels
+  ) : []
 }
 
-# Alert: Vertex AI estimated cost over a threshold
-# One policy per named threshold, so a warning level and a critical level raise
-# separate incidents. Several conditions inside a single policy would share the
-# combiner and collapse into one incident, which is why they are not used here.
+# Alert: Vertex AI estimated cost over a threshold.
+# One policy per named threshold, so each level raises its own incident;
+# conditions sharing a policy would share the combiner and collapse into one.
+# Created only when the service, the cost family and the threshold are enabled
+# and at least one model is priced.
 resource "google_monitoring_alert_policy" "vertex_ai_cost" {
   for_each = local.vertex_ai_cost_alerts
 
@@ -289,9 +248,8 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
     notification_prompts = each.value.prompts
   }
 
-  # An enabled alert with nowhere to send opens incidents nobody is told about.
-  # Silencing one on purpose is done with notification_enabled, not by leaving
-  # the channels empty.
+  # An enabled alert with no channel opens incidents nobody is told about.
+  # notification_enabled = false is how a check stays silent on purpose.
   lifecycle {
     precondition {
       condition     = each.value.silent || length(each.value.channels) > 0
@@ -300,24 +258,17 @@ resource "google_monitoring_alert_policy" "vertex_ai_cost" {
   }
 }
 
-# Alert: Vertex AI invocation error rate
-# Watches the share of invocations answered with a given response code rather
-# than their absolute count, which says nothing without the denominator. The
-# ratio and the grouping follow the alert template Google publishes for its own
-# Vertex AI dashboard samples; the invocation floor does not, and is there
-# because a bare ratio is unusable on a per-model grouping, where a model can
-# take single-digit calls in a window.
+# Alert: Vertex AI invocation error rate.
+# Share of invocations answered with a given response code, grouped per model and
+# location, evaluated only above min_invocations calls in the window. Ratio and
+# grouping follow Google's published sample; the floor does not.
 #
-# The defaults trade detection latency for silence: a wide window and a floor
-# mean a model with little traffic is not watched at all, which is deliberate.
-# Narrowing the window without lowering the floor makes most windows ineligible
-# and the alert blind; lowering the floor without widening the window brings
-# back the one-failure-out-of-two false positive.
+# Window and floor move together: a narrower window leaves fewer windows above the
+# floor, a lower floor makes single failures significant.
 #
-# On Gemini pay-as-you-go a 429 is contention on a shared resource and not an
-# exhausted project quota, so this alert dates a degradation; it does not point
-# at a quota increase to request. On partner models, which do carry fixed
-# per-region quotas, the same signal reads differently.
+# On Gemini pay-as-you-go a 429 is contention on shared capacity, not an exhausted
+# project quota. Partner models carry fixed per-region quotas, where it reads
+# differently.
 resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   count = local.vertex_ai_error_rate_enabled ? 1 : 0
 
@@ -338,7 +289,7 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
     condition_prometheus_query_language {
       query = join("", [
         "sum by (model_user_id, location)(rate({\"${local.vertex_ai_metrics.invocation_count}\", ",
-        "response_code=\"${var.vertex_ai.alerts.error_rate.response_code}\"}",
+        "response_code=${jsonencode(var.vertex_ai.alerts.error_rate.response_code)}}",
         "[${var.vertex_ai.alerts.error_rate.window_seconds}s]))",
         " / ",
         "sum by (model_user_id, location)(rate({\"${local.vertex_ai_metrics.invocation_count}\"}",
@@ -357,7 +308,7 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
   documentation {
     mime_type = "text/markdown"
     content   = <<-EOT
-      More than ${var.vertex_ai.alerts.error_rate.threshold_ratio * 100}% of the invocations of a single Vertex AI model returned ${var.vertex_ai.alerts.error_rate.response_code}, over a window of ${var.vertex_ai.alerts.error_rate.window_seconds}s in which that model took at least ${var.vertex_ai.alerts.error_rate.min_invocations} calls.
+      More than ${var.vertex_ai.alerts.error_rate.threshold_ratio * 100}% of the invocations of one Vertex AI model in one location returned ${var.vertex_ai.alerts.error_rate.response_code}, over a window of ${var.vertex_ai.alerts.error_rate.window_seconds}s in which that model and location took at least ${var.vertex_ai.alerts.error_rate.min_invocations} calls. The grouping and the floor both work on the model and location pair, so a model answering from several regions is watched once per region.
 
       **On a Gemini pay-as-you-go model a 429 is contention on a shared resource, not an exhausted project quota.** Those models have no per-project requests-per-minute limit, so there is no quota increase to request: the alert dates a degradation, it does not point at a fix. The caller should back off and retry.
 
@@ -378,7 +329,7 @@ resource "google_monitoring_alert_policy" "vertex_ai_error_rate" {
 
   lifecycle {
     precondition {
-      condition     = var.vertex_ai.alerts.error_rate.notification_enabled == false || length(local.vertex_ai_error_rate_channels) > 0
+      condition     = !local.vertex_ai_error_rate_notify || length(local.vertex_ai_error_rate_channels) > 0
       error_message = "The Vertex AI error-rate alert resolves to no notification channel. Set notification_channels on the alert, on the service or at the module root, or set notification_enabled = false to silence it on purpose."
     }
   }

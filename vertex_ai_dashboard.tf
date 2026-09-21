@@ -1,24 +1,17 @@
 # Vertex AI consumption and estimated-cost Cloud Monitoring dashboard.
 #
-# One dashboard per project. Vertex AI has no application dimension, so the
-# per-app dashboard shape used by the Typesense service does not apply here.
+# One dashboard per project: Vertex AI has no application dimension. Widget set
+# follows Google's published sample and adds the estimated cost.
 #
-# The widget set follows the dashboard Google publishes for its own Vertex AI
-# integration (invocations, latencies, response codes, throughput, token counts)
-# and adds what that one does not carry: the estimated cost, the cache token
-# split, and the share of input served from cache.
+# The API normalizes dashboard_json on write, so any value it strips is a
+# perpetual plan diff. Rules the JSON here follows: xPos/yPos only when non-zero,
+# no empty arrays, objects or strings, no nulls, enums uppercase and never
+# zero-valued, no blankView.
 #
-# Drift-safe JSON authoring (the Cloud Monitoring API normalizes dashboard_json
-# on write, so any value it strips becomes a perpetual plan diff): xPos/yPos keys
-# are attached only when non-zero, no empty arrays/objects/strings, no nulls,
-# enums uppercase and never zero-valued, no blankView.
-#
-# Time-range behaviour: no widget declares its own timeRange, so every one of
-# them follows the dashboard picker. Filter-based widgets must carry an
-# alignmentPeriod whenever an aligner is set (the API rejects the pair
-# otherwise); the console widens it on its own as the selected range grows.
-# Scorecards that show a total set outputFullDuration so the whole selected
-# window collapses into one value instead of the last aligned point.
+# No widget declares a timeRange, so all follow the dashboard picker. A
+# filter-based widget with an aligner must carry an alignmentPeriod; the console
+# widens it as the range grows. Total scorecards set outputFullDuration, which
+# collapses the selected window into one value instead of the last point.
 
 locals {
   vertex_ai_dashboard_enabled = var.vertex_ai.enabled && try(var.vertex_ai.dashboard.enabled, false)
@@ -36,10 +29,8 @@ locals {
   vertex_ai_latency_filter    = "metric.type=\"${local.vertex_ai_metrics.invocation_latency}\" AND resource.type=\"${local.vertex_ai_publisher_resource}\""
   vertex_ai_ttft_filter       = "metric.type=\"${local.vertex_ai_metrics.first_token_latency}\" AND resource.type=\"${local.vertex_ai_publisher_resource}\""
 
-  # The cache assumption has to be readable on the dashboard, with its value in
-  # plain sight: it is the one input to the cost figure that is not measured.
-  # Shares that all agree collapse into one sentence; a mixed set names each
-  # model, because an average would hide exactly what the reader needs.
+  # Sentence stating the cache assumption behind the cost figure. One share for
+  # every model collapses into a single number; a mixed set names each model.
   vertex_ai_applied_shares = {
     for model_name in local.vertex_ai_priced_models :
     model_name => var.vertex_ai.pricing[model_name].cached_input_share
@@ -62,9 +53,8 @@ locals {
   )
 
   vertex_ai_dashboard_widgets = {
-    # The Widget object has no description field, only a title, so the caveat
-    # that makes the two cost tiles readable has to be its own text widget.
-    # It sits above them and is created only when they are.
+    # Text widget: the Widget object has only a title and no description field.
+    # Created with the cost tiles it explains, above them.
     cost_note = {
       title = "How to read the estimated cost"
       text = {
@@ -182,9 +172,8 @@ locals {
       }
     }
 
-    # Split by model and by token type on separate charts rather than on one
-    # grouped by both: six models times five token types is around thirty series,
-    # far past the point where adjacent colours stop being tellable apart.
+    # Model and token type on separate charts: grouping by both gives around
+    # thirty series, past the point where adjacent colours are tellable apart.
     tokens_by_type_chart = {
       title = "Tokens by type"
       xyChart = {
@@ -207,9 +196,8 @@ locals {
       }
     }
 
-    # consumed_token_throughput is burndown-weighted and is the figure quota
-    # accounting uses; token_count above is the raw count. They measure different
-    # quantities and are deliberately kept in separate widgets.
+    # consumed_token_throughput is burndown-weighted and drives quota accounting;
+    # token_count above is the raw count. Different quantities, separate widgets.
     throughput_chart = {
       title = "Consumed token throughput by model"
       xyChart = {
@@ -276,15 +264,9 @@ locals {
       }
     }
 
-    # error_category separates contention on a shared resource from a quota the
-    # caller actually exhausted, which is the difference between a 429 you can
-    # act on and one you cannot.
-    #
-    # Vertex leaves the label unset on a good share of real traffic, Gemini 429s
-    # included, and the chart is then empty. That is why the error-rate alert
-    # points at it as a hint rather than as the diagnosis, and why an empty chart
-    # here must not be read as "no errors": the response-code chart beside it is
-    # the one that always has data.
+    # error_category tells contention from an exhausted quota. Vertex leaves the
+    # label unset on much of the traffic, Gemini 429s included, so this chart is
+    # often empty; the response-code chart beside it always has data.
     error_category_chart = {
       title = "Invocations by error category (label often unset)"
       xyChart = {
@@ -329,17 +311,13 @@ locals {
       }
     }
 
-    # One percentile per chart. Both on one chart would put twelve lines on six
-    # colours, and a static legendTemplate would label every line of a dataset
-    # "p50", losing the model name that identifies it.
+    # One percentile per chart: both together would be twelve lines on six colours.
     #
-    # The percentile is taken by the cross-series reducer, not by the aligner:
-    # these are DISTRIBUTION metrics split across latency_type and token-size
-    # buckets, so aligning each series to its own percentile and then averaging
-    # would produce a number no request ever had. ALIGN_DELTA merges the
-    # distributions first and REDUCE_PERCENTILE_* reads the percentile off the
-    # merged one. The filter pins latency_type to "total", the latency the
-    # caller actually waits; "model" and "overhead" are its two components.
+    # The percentile comes from the cross-series reducer, not the aligner. These
+    # are DISTRIBUTION metrics split across latency_type and token-size buckets:
+    # ALIGN_DELTA merges the distributions and REDUCE_PERCENTILE_* reads the
+    # percentile off the merged one. latency_type is pinned to "total", the
+    # latency the caller waits; "model" and "overhead" are its components.
     latency_p95_chart = {
       title = "Invocation latency p95 per model"
       xyChart = {
@@ -384,26 +362,17 @@ locals {
       }
     }
 
-    # There is deliberately no "share of prompt tokens served from cache" tile.
-    # It would have to read the 'cache_read_input' token type, which exists only
-    # on partner-model series and is zero unless the caller drives Anthropic
-    # prompt caching explicitly. Gemini's implicit cache reads never appear under
-    # any cache type: they are inside 'input'. A tile built that way therefore
-    # reads a steady 0% precisely when caching is working hardest, which is worse
-    # than showing nothing, and it was removed for that reason. The cached share
-    # is visible in the BigQuery billing export, on the "Text Input Caching" SKU.
+    # No cache-share tile. It could only read 'cache_read_input', which exists on
+    # partner-model series alone and is zero unless the caller drives Anthropic
+    # prompt caching; Gemini cache reads sit inside 'input'. The cached share is
+    # in the BigQuery billing export, on the "Text Input Caching" SKU.
   }
 
-  # Rows are assembled first, then flattened into positioned tiles. Empty rows
-  # are dropped so the remaining tiles reflow instead of leaving a gap.
-  #
-  # Optional tiles are selected with a filtered for-expression rather than a
-  # conditional between two tuples: Terraform requires both arms of a ternary to
-  # carry the same type, and a one-tile tuple is not the same type as an empty
-  # one, so the ternary form fails to evaluate.
-  # The scorecard row holds four tiles with the cost one and three without, so
-  # the width has to follow: leaving it at 12 would end the row at 36 of the 48
-  # columns and leave a quarter of the row empty whenever cost_widgets is off.
+  # Rows assembled first, then flattened into positioned tiles. Empty rows are
+  # dropped so the rest reflow. Optional tiles use a filtered for-expression: a
+  # ternary between a one-tile tuple and an empty one does not type-check.
+  # Scorecard width follows the tile count: four tiles with the cost one, three
+  # without. A fixed 12 would leave a quarter of the row empty in the second case.
   vertex_ai_dashboard_scorecard_width = local.vertex_ai_dashboard_cost ? 12 : 16
 
   vertex_ai_dashboard_rows = [
@@ -457,9 +426,9 @@ locals {
   ])
 }
 
-# Dashboard: Vertex AI consumption and estimated cost
-# displayName is not the resource identity: title changes, display_name
-# overrides included, are in-place updates.
+# Dashboard: Vertex AI consumption and estimated cost.
+# displayName is not the resource identity, so a title change is an in-place
+# update.
 resource "google_monitoring_dashboard" "vertex_ai" {
   count = local.vertex_ai_dashboard_enabled ? 1 : 0
 
