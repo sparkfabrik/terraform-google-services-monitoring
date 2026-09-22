@@ -738,3 +738,332 @@ variable "gke_node_count" {
     error_message = "When 'enabled' is true, 'cluster_name' must be provided and cannot be empty."
   }
 }
+
+variable "vertex_ai" {
+  description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. One part of that estimate is assumed rather than measured. Google bills prompt tokens it served from its implicit context cache at a tenth of the input price, and the metric folds them into the same 'input' token type as uncached ones, so nothing in Cloud Monitoring can separate them. 'cached_input_share' names, per model, the fraction taken to be cache reads: that fraction is valued at the caching rate and the rest at the input rate, blended into one effective input price. Uncorrected the estimate only ever overshoots, so a cost alert fires early and never late; corrected it tracks the invoice closely while the assumption holds and reads under it when the real share falls below the assumed one, which makes the same alert fire late. Set a share to 0 to get the upper-bound behaviour back, and re-measure it against the 'Text Input Caching' line of the billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. Batch traffic is excluded from the estimate altogether: the metric reports it with a 'batch_' prefix on its 'source' label and it is billed at a different rate, so costing it with the online prices would be wrong in both directions. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the map key is the policy identity, so renaming a threshold destroys and recreates its policy and loses its incident history; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations answered with a given response code, 429 by default, grouped per model and per location, and only once that pair saw at least 'min_invocations' calls in the window: without that floor a model taking a handful of calls trips the alert on one failure, since one call in three is already 33%. Because the grouping includes the location, a model answering from several regions has to clear the floor in each of them separately. Note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert dates a degradation and has no quota increase as a remedy. Notification routing resolves from the most specific setting to the least: the threshold, then the cost family, then the service, then the root 'notification_channels'. Declare the channels and the prompts once on 'alerts.cost' and a threshold overrides them only when it needs something different. The same chain applies to 'notification_enabled': resolving to false creates the policy with no channels, which is how a check stays silent on purpose. An enabled alert that resolves to no channels at all is rejected at plan time, because it would open incidents nobody is told about. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
+  default     = {}
+  type = object({
+    enabled               = optional(bool, false)
+    project_id            = optional(string, null)
+    notification_enabled  = optional(bool, true)
+    notification_channels = optional(list(string), [])
+    models                = optional(list(string), null)
+
+    # Date the price table was last checked against the published list, shown on
+    # the dashboard next to the estimate. Override it together with 'pricing':
+    # a project that supplies its own prices owns its own verification date.
+    pricing_verified_on = optional(string, "2026-09-21")
+
+    # List price in USD per 1M tokens, keyed by the metric's 'type' label. Prices
+    # are the standard tier, which the metric reports as request_type="shared" and
+    # shared_request_type="standard"; Off-Peak, Flex and Priority tiers cost
+    # differently and are not modelled. Regional endpoints carry a 10% premium and
+    # are held verbatim rather than as a multiplier, because Google rounds them.
+    #
+    # MAINTAINED BY HAND. A stale price gives a wrong cost with no error and no
+    # symptom, so the review belongs on a recurring issue.
+    #
+    # Google models are checkable against the Cloud Billing Catalog, which is
+    # public and needs no billing permission:
+    #
+    #   TOKEN=$(gcloud auth print-access-token)
+    #   curl -s -H "Authorization: Bearer $TOKEN" \
+    #     "https://cloudbilling.googleapis.com/v1/services/C7E2-9256-1C43/skus?pageSize=5000" \
+    #   | jq -r '.skus[] | select(.description | test("Gemini 3.5 Flash Global Text"))
+    #            | "\(.description)\t\(.pricingInfo[-1].pricingExpression.tieredRates[-1].unitPrice.nanos/1000) USD/1M"'
+    #
+    # Swap the test() pattern for the model; read only the "- Predictions" rows.
+    # C7E2-9256-1C43 is the Vertex AI service, covering Gemini and the embedding
+    # models. SKU ids for a direct diff:
+    #   gemini-3.5-flash       global  input 9733-FF95-45E3, output 4E73-15BD-0D78
+    #   gemini-3-flash-preview global  input 7EBE-3B46-F75C, output 0127-F0B7-365E
+    #
+    # Partner models are not in the catalog: nothing among its 1.7k services
+    # mentions Claude, Anthropic or Sonnet. They bill under services of their own,
+    # visible in billing data only. Check them against the published pricing page
+    # or an invoice.
+    #
+    # Also re-inventory the live token_count series at each review: a model with
+    # traffic and no entry here shows in the token widgets and costs zero.
+    #
+    # State of verification: every Gemini and embedding row matched the catalog on
+    # 2026-09-21. Claude input and output matched an invoice on 2026-09-18; the
+    # Claude cache rows come from the published pricing page alone.
+    #
+    # cache_* types carry two meanings here. On partner models they are real metric
+    # series, priced as their own term. On Gemini no such series exists:
+    # 'cache_read_input' is the rate 'cached_input_share' values the assumed cached
+    # fraction at, folded into the input price.
+    #
+    # 'cached_input_share' is the one entry that is not a published price. Setting
+    # it, 0 included, declares that the model reports cache reads inside 'input';
+    # leaving it out declares that it reports them separately. The 0.30 on the
+    # Gemini rows matches a workload measured at 34.6% over 30 days and 36.6% over
+    # 14, and brings the estimate within about 9% of that invoice against 46%
+    # uncorrected. Re-measure it from the "Text Input Caching" SKU of your own
+    # billing export; 0 gives back a figure that can only overshoot.
+    pricing = optional(map(object({
+      global             = map(number)
+      regional           = optional(map(number), null)
+      cached_input_share = optional(number, null)
+      })), {
+      "gemini-3.5-flash" = {
+        global             = { input = 1.50, output = 9.00, cache_read_input = 0.15 }
+        regional           = { input = 1.65, output = 9.90, cache_read_input = 0.165 }
+        cached_input_share = 0.30
+      }
+      "gemini-3-flash-preview" = {
+        global             = { input = 0.50, output = 3.00, cache_read_input = 0.05 }
+        cached_input_share = 0.30
+      }
+      # List price. An account paying a promotional rate sees it on the invoice as
+      # a credit in the "Other savings" column, not as a lower list price, so the
+      # estimate does not reflect it.
+      "gemini-3.7-flash" = {
+        global             = { input = 1.50, output = 7.50, cache_read_input = 0.15 }
+        regional           = { input = 1.65, output = 8.25, cache_read_input = 0.165 }
+        cached_input_share = 0.30
+      }
+      # Served from single regions only: 'source' carries a region name, never
+      # "global". Google publishes no regional column for embeddings and scopes the
+      # 10% non-global premium to the GA Gemini 3+ generative families, so one
+      # table prices both. A "Non-global" row appearing upstream would change this.
+      "gemini-embedding-001" = {
+        global = { input = 0.15, output = 0 }
+      }
+      "claude-sonnet-4-6" = {
+        global = {
+          input                = 3.00
+          output               = 15.00
+          cache_read_input     = 0.30
+          cache_write_input    = 3.75
+          cache_write_1h_input = 6.00
+        }
+        regional = {
+          input                = 3.30
+          output               = 16.50
+          cache_read_input     = 0.33
+          cache_write_input    = 4.13
+          cache_write_1h_input = 6.60
+        }
+      }
+      "claude-sonnet-5" = {
+        global = {
+          input                = 2.00
+          output               = 10.00
+          cache_read_input     = 0.20
+          cache_write_input    = 2.50
+          cache_write_1h_input = 4.00
+        }
+        regional = {
+          input                = 2.20
+          output               = 11.00
+          cache_read_input     = 0.22
+          cache_write_input    = 2.75
+          cache_write_1h_input = 4.40
+        }
+      }
+    })
+
+    dashboard = optional(object({
+      enabled      = optional(bool, true)
+      display_name = optional(string, null)
+      cost_widgets = optional(bool, true)
+    }), {})
+
+    alerts = optional(object({
+      cost = optional(object({
+        enabled = optional(bool, true)
+        # Routing and prompts for the whole cost family; a threshold overrides
+        # them individually. Both prompts by default: a cost threshold watches a
+        # rolling window, so an incident closing means spend fell back under the
+        # budget. The error-rate alert notifies on opening alone, its incidents
+        # auto-closing hourly.
+        notification_enabled  = optional(bool, null)
+        notification_channels = optional(list(string), null)
+        notification_prompts  = optional(list(string), ["OPENED", "CLOSED"])
+        # Declared by the consumer: a monetary amount is a budget and does not
+        # transfer between projects, so the module ships none and no cost alert
+        # exists until one is written here. Each entry becomes its own policy.
+        # 'enabled = false' silences one without deleting it.
+        thresholds = optional(map(object({
+          enabled                     = optional(bool, true)
+          threshold_usd               = number
+          window_seconds              = optional(number, 86400)
+          duration_seconds            = optional(number, 0)
+          evaluation_interval_seconds = optional(number, 300)
+          severity                    = optional(string, null) # any casing, normalized to uppercase
+          notification_enabled        = optional(bool, null)
+          notification_channels       = optional(list(string), null)
+          notification_prompts        = optional(list(string), null)
+          auto_close_seconds          = optional(number, 86400)
+        })), {})
+      }), {})
+
+      error_rate = optional(object({
+        enabled       = optional(bool, true)
+        response_code = optional(string, "429")
+        # Share of the invocations of one model in one location. On Gemini
+        # pay-as-you-go a low background rate of 429 is normal contention: one
+        # production project rests around 2.5% with day-long clusters above 5%,
+        # which is what the 5% default sits above.
+        threshold_ratio = optional(number, 0.05)
+        # Floor on the denominator: one failure out of two calls reads as 50%.
+        # Applied per model and location, the grouping of the query, so a model
+        # answering from several regions clears it in each region separately.
+        # Lower it, or widen the window, on a multi-region workload.
+        min_invocations = optional(number, 20)
+        # Wide enough to clear min_invocations often: two hours leaves two thirds
+        # of the windows evaluable on the project this default was measured on.
+        # Minutes would leave most of them below the floor.
+        window_seconds = optional(number, 7200)
+        # The window is the smoothing, so no extra pending time is needed.
+        duration_seconds            = optional(number, 0)
+        evaluation_interval_seconds = optional(number, 300)
+        severity                    = optional(string, null)
+        notification_enabled        = optional(bool, null)
+        notification_channels       = optional(list(string), null)
+        notification_prompts        = optional(list(string), ["OPENED"])
+        auto_close_seconds          = optional(number, 3600)
+      }), {})
+    }), {})
+  })
+
+  validation {
+    condition = alltrue([
+      for model_name, config in var.vertex_ai.pricing :
+      trimspace(model_name) != "" && length(config.global) > 0
+    ])
+    error_message = "Each pricing entry must have a non-empty model name (map key) and at least one price in its global table."
+  }
+
+  # The two tables are checked separately: merge() would let a regional entry
+  # mask a negative global one under the same key, which the 'price > 0' filter
+  # then drops from the cost silently.
+  validation {
+    condition = alltrue(flatten([
+      for model_name, config in var.vertex_ai.pricing : concat(
+        [for token_type, price in config.global : price >= 0],
+        [for token_type, price in coalesce(config.regional, {}) : price >= 0],
+      )
+    ]))
+    error_message = "Prices must be zero or positive, in both the global and the regional table."
+  }
+
+  # Cloud Monitoring rejects an unknown severity at apply time, with a clean plan.
+  validation {
+    condition = alltrue(concat(
+      [
+        for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+        contains(["CRITICAL", "ERROR", "WARNING"], upper(threshold.severity))
+        if threshold.severity != null
+      ],
+      var.vertex_ai.alerts.error_rate.severity == null ? [] : [
+        contains(["CRITICAL", "ERROR", "WARNING"], upper(var.vertex_ai.alerts.error_rate.severity))
+      ],
+    ))
+    error_message = "An alert severity must be one of CRITICAL, ERROR or WARNING (any casing); leave it null to create the policy without one."
+  }
+
+  # Every duration becomes a PromQL range selector or an API duration, both of
+  # which reject fractional seconds. Terraform accepts 3600.5 as a 'number'.
+  validation {
+    condition = alltrue(concat(
+      flatten([
+        for name, threshold in var.vertex_ai.alerts.cost.thresholds : [
+          floor(threshold.window_seconds) == threshold.window_seconds,
+          floor(threshold.duration_seconds) == threshold.duration_seconds,
+          floor(threshold.auto_close_seconds) == threshold.auto_close_seconds,
+        ]
+      ]),
+      [
+        floor(var.vertex_ai.alerts.error_rate.window_seconds) == var.vertex_ai.alerts.error_rate.window_seconds,
+        floor(var.vertex_ai.alerts.error_rate.duration_seconds) == var.vertex_ai.alerts.error_rate.duration_seconds,
+        floor(var.vertex_ai.alerts.error_rate.auto_close_seconds) == var.vertex_ai.alerts.error_rate.auto_close_seconds,
+      ],
+    ))
+    error_message = "Every '_seconds' field must be a whole number of seconds: a fractional value produces a PromQL range selector the query parser rejects at apply time."
+  }
+
+  validation {
+    condition = (
+      var.vertex_ai.alerts.error_rate.min_invocations >= 0 &&
+      floor(var.vertex_ai.alerts.error_rate.min_invocations) == var.vertex_ai.alerts.error_rate.min_invocations
+    )
+    error_message = "The error_rate min_invocations is a count of invocations and must be a whole number of zero or more; 0 disables the volume floor and lets a single failed call trip the ratio."
+  }
+
+  validation {
+    condition = alltrue([
+      for model_name, config in var.vertex_ai.pricing :
+      config.cached_input_share >= 0 && config.cached_input_share < 1
+      if config.cached_input_share != null
+    ])
+    error_message = "A 'cached_input_share' is a fraction of the prompt tokens and must be at least 0 and below 1; leave it out entirely for a model that reports its cache reads as a series of their own."
+  }
+
+  # A share needs both rates in every table the model carries. A regional table
+  # missing one is skipped by the blend, leaving regional traffic at the full
+  # input rate while global traffic is corrected.
+  validation {
+    condition = alltrue([
+      # coalesce() and not a null guard on the left of '||': HCL evaluates both
+      # sides, so keys(config.regional) runs even when regional is null. Falling
+      # back to the global table repeats a check that has already passed.
+      for model_name, config in var.vertex_ai.pricing : (
+        contains(keys(config.global), "input") &&
+        contains(keys(config.global), "cache_read_input") &&
+        contains(keys(coalesce(config.regional, config.global)), "input") &&
+        contains(keys(coalesce(config.regional, config.global)), "cache_read_input")
+      )
+      if config.cached_input_share != null
+    ])
+    error_message = "A model that sets 'cached_input_share' must carry both an 'input' and a 'cache_read_input' price in its global table, and in its regional table when it has one: those are the two rates the assumed cached fraction is blended from, and a table missing either is silently left uncorrected."
+  }
+
+  validation {
+    condition = alltrue([
+      for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+      threshold.threshold_usd > 0 && threshold.window_seconds >= 60
+    ])
+    error_message = "A cost threshold must set a positive threshold_usd and a window_seconds of at least 60."
+  }
+
+
+  validation {
+    condition     = var.vertex_ai.alerts.error_rate.threshold_ratio > 0 && var.vertex_ai.alerts.error_rate.threshold_ratio <= 1
+    error_message = "The error_rate threshold_ratio is a share of the invocations and must be greater than 0 and at most 1."
+  }
+
+  validation {
+    condition     = var.vertex_ai.models == null ? true : length(var.vertex_ai.models) > 0
+    error_message = "When set, models must list at least one model; use null to price every model in the table."
+  }
+
+  validation {
+    condition = var.vertex_ai.models == null ? true : alltrue([
+      for model_name in var.vertex_ai.models : contains(keys(var.vertex_ai.pricing), model_name)
+    ])
+    error_message = "Every entry of 'models' must name a model present in 'pricing'. A name that matches nothing would silently empty the cost estimate, removing every cost alert and every cost widget without an error."
+  }
+
+  validation {
+    condition = alltrue([
+      for name, threshold in var.vertex_ai.alerts.cost.thresholds :
+      threshold.evaluation_interval_seconds > 0 && threshold.evaluation_interval_seconds % 30 == 0 &&
+      threshold.duration_seconds >= 0 && threshold.auto_close_seconds > 0
+    ])
+    error_message = "On a cost threshold, evaluation_interval_seconds must be a positive multiple of 30 (the Cloud Monitoring API rejects anything else at apply time), duration_seconds must not be negative and auto_close_seconds must be positive."
+  }
+
+  validation {
+    condition = (
+      var.vertex_ai.alerts.error_rate.evaluation_interval_seconds > 0 &&
+      var.vertex_ai.alerts.error_rate.evaluation_interval_seconds % 30 == 0 &&
+      var.vertex_ai.alerts.error_rate.duration_seconds >= 0 &&
+      var.vertex_ai.alerts.error_rate.auto_close_seconds > 0 &&
+      var.vertex_ai.alerts.error_rate.window_seconds >= 60
+    )
+    error_message = "On the error-rate alert, evaluation_interval_seconds must be a positive multiple of 30, duration_seconds must not be negative, auto_close_seconds must be positive and window_seconds must be at least 60."
+  }
+}
