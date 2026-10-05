@@ -30,6 +30,10 @@ output "ssl_alert_policy_names" {
   value = { for days, alert in google_monitoring_alert_policy.ssl_expiring_days : days => alert.name }
 }
 
+output "cloud_armor_adaptive_protection_alert_policy_name" {
+  value = one(google_monitoring_alert_policy.cloud_armor_adaptive_protection[*].name)
+}
+
 output "gke_node_count_alert_policy_name" {
   value = one(google_monitoring_alert_policy.gke_node_count[*].name)
 }

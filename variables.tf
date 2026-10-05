@@ -739,6 +739,31 @@ variable "gke_node_count" {
   }
 }
 
+variable "cloud_armor_adaptive_protection" {
+  description = "Configuration for the Cloud Armor Adaptive Protection alert. Fires on every attack Adaptive Protection detects on the listed security policies, read from its dos_attack log. Requires 'security_policies' when enabled. Adaptive Protection (layer 7 DDoS defense) must be enabled on each policy: the module reads every policy at plan time and fails when it is not, unless 'verify_adaptive_protection_enabled' is false (needed when a policy is created in the same apply, since the data source cannot read a policy that does not exist yet)."
+  default     = {}
+  type = object({
+    enabled                            = optional(bool, false)
+    project_id                         = optional(string, null)
+    notification_enabled               = optional(bool, true)
+    notification_channels              = optional(list(string), [])
+    user_labels                        = optional(map(string), {})
+    security_policies                  = optional(list(string), [])
+    verify_adaptive_protection_enabled = optional(bool, true)
+    severity                           = optional(string, "CRITICAL")
+    auto_close_seconds                 = optional(number, 1800)
+    notification_rate_limit_seconds    = optional(number, 300)
+  })
+
+  validation {
+    condition = (
+      !var.cloud_armor_adaptive_protection.enabled ||
+      length(var.cloud_armor_adaptive_protection.security_policies) > 0
+    )
+    error_message = "When 'enabled' is true, 'security_policies' must list at least one Cloud Armor security policy name."
+  }
+}
+
 variable "vertex_ai" {
   description = "Configuration for Vertex AI consumption and estimated-cost observability on the publisher models of a project. Vertex AI publishes token counts to Cloud Monitoring but no spend metric, so the cost shown by this service is an estimate computed as tokens times the published list price; the authoritative figure is the BigQuery billing export. One part of that estimate is assumed rather than measured. Google bills prompt tokens it served from its implicit context cache at a tenth of the input price, and the metric folds them into the same 'input' token type as uncached ones, so nothing in Cloud Monitoring can separate them. 'cached_input_share' names, per model, the fraction taken to be cache reads: that fraction is valued at the caching rate and the rest at the input rate, blended into one effective input price. Uncorrected the estimate only ever overshoots, so a cost alert fires early and never late; corrected it tracks the invoice closely while the assumption holds and reads under it when the real share falls below the assumed one, which makes the same alert fire late. Set a share to 0 to get the upper-bound behaviour back, and re-measure it against the 'Text Input Caching' line of the billing export. 'pricing' is the price table: one entry per model, keyed by the value of the metric's 'type' label, in USD per one million tokens, with a 'global' table for traffic on the global endpoint and an optional 'regional' table for regional and multi-region endpoints (null falls back to the global table). Models absent from the table stay visible in the consumption widgets and contribute nothing to the estimate. Batch traffic is excluded from the estimate altogether: the metric reports it with a 'batch_' prefix on its 'source' label and it is billed at a different rate, so costing it with the online prices would be wrong in both directions. 'models' narrows the cost estimate to a subset of the priced models; null uses them all. The price table is maintained by hand and must be reviewed periodically: no published API covers every model, so a stale price produces a confident wrong cost with no visible symptom, and 'pricing_verified_on' is the date the dashboard shows next to the estimate. The service is off by default and is the only switch that has to be flipped: enabling it brings up the dashboard and the error-rate alert, and the dashboard, its cost widgets, the cost alert family and the error-rate alert can each be turned off on their own. 'alerts.cost.thresholds' is a map of named thresholds, each becoming its own alert policy so a warning level and a critical level raise distinguishable incidents; the map key is the policy identity, so renaming a threshold destroys and recreates its policy and loses its incident history; the module ships none, because a monetary amount is a budget only the consuming project knows, and an entry set to 'enabled = false' is silenced without being deleted. 'alerts.error_rate' watches the share of invocations answered with a given response code, 429 by default, grouped per model and per location, and only once that pair saw at least 'min_invocations' calls in the window: without that floor a model taking a handful of calls trips the alert on one failure, since one call in three is already 33%. Because the grouping includes the location, a model answering from several regions has to clear the floor in each of them separately. Note that on Gemini pay-as-you-go a 429 means contention on a shared resource and not an exhausted quota, so the alert dates a degradation and has no quota increase as a remedy. Notification routing resolves from the most specific setting to the least: the threshold, then the cost family, then the service, then the root 'notification_channels'. Declare the channels and the prompts once on 'alerts.cost' and a threshold overrides them only when it needs something different. The same chain applies to 'notification_enabled': resolving to false creates the policy with no channels, which is how a check stays silent on purpose. An enabled alert that resolves to no channels at all is rejected at plan time, because it would open incidents nobody is told about. Every duration-like field is a number of seconds carrying a '_seconds' name suffix."
   default     = {}
