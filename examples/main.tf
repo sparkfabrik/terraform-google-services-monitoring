@@ -188,6 +188,11 @@ module "example" {
 
   # GKE total node count alert: warn when the cluster runs more than 'threshold'
   # nodes for 'duration' (default 24h). Counts every node pool of the cluster.
+  cloud_armor_adaptive_protection = {
+    enabled           = true
+    security_policies = ["test-waf-policy"]
+  }
+
   gke_node_count = {
     enabled      = true
     cluster_name = "test-cluster"

@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `cloud_armor_adaptive_protection` alert (disabled by default) that notifies every attack Cloud Armor Adaptive Protection detects on the listed security policies, with a `cloud_armor_adaptive_protection_alert_policy_name` output. At plan time the module checks that Adaptive Protection is enabled on each listed policy and fails otherwise; `verify_adaptive_protection_enabled = false` skips the check for a policy created in the same apply.
+
 ## [0.24.0] - 2026-09-21
 
 [Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.23.0...0.24.0)
