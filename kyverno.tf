@@ -6,9 +6,12 @@ locals {
 
   kyverno_alert_documentation = var.kyverno.alert_documentation != null ? var.kyverno.alert_documentation : "Kyverno produced ERROR logs in namespace ${var.kyverno.namespace} on cluster ${local.kyverno_cluster_name}. See the Kyverno policy dashboard and the kyverno namespace logs."
 
-  # Tier 1 noise classes, matched on jsonPayload.message OR jsonPayload.error.
+  # Noise classes, matched on jsonPayload.message OR jsonPayload.error.
   # Patterns are plain substrings (no regex metacharacters), joined into one alternation.
-  kyverno_noise_regex = try(join("|", var.kyverno.service_errors_check.noise_exclusions), "")
+  # Tier 1 and tier 2 keep separate lists: tier 2 must still count floods of the
+  # transient classes tier 1 ignores, so it only drops classes that are never errors.
+  kyverno_noise_regex        = try(join("|", var.kyverno.service_errors_check.noise_exclusions), "")
+  kyverno_volume_noise_regex = try(join("|", var.kyverno.volume_check.noise_exclusions), "")
 
   # Tier 1 — service errors: ERROR logs, excluding the engine logger and the measured noise classes.
   kyverno_tier1_filter = <<-EOT
@@ -26,7 +29,8 @@ locals {
     %{~endif~}
   EOT
 
-  # Tier 2 — volume catch-all: same source, no exclusions, still excluding the engine logger.
+  # Tier 2 — volume catch-all: same source, excluding the engine logger and only the
+  # non-error classes in volume_check.noise_exclusions.
   kyverno_tier2_filter = <<-EOT
     resource.type="k8s_container"
     AND resource.labels.project_id="${local.kyverno_project_id}"
@@ -34,6 +38,12 @@ locals {
     AND resource.labels.namespace_name="${var.kyverno.namespace}"
     AND severity=ERROR
     AND NOT jsonPayload.logger=~"^engine"
+    %{~if local.kyverno_volume_noise_regex != ""~}
+    AND NOT (
+      jsonPayload.message=~"(?i)(${local.kyverno_volume_noise_regex})"
+      OR jsonPayload.error=~"(?i)(${local.kyverno_volume_noise_regex})"
+    )
+    %{~endif~}
   EOT
 
   # Engine — broken policies: engine-logger ERROR logs, labeled by policy name.
@@ -168,9 +178,10 @@ resource "google_monitoring_alert_policy" "kyverno_service_errors" {
 }
 
 # Tier 2 metric — volume catch-all
-# Same source as tier 1 but with no exclusions, so a flood of any class (even a
-# normally-excluded benign one) is counted. Guards against the exclusion list
-# hiding a sustained incident.
+# Same source as tier 1 but without the tier 1 exclusions, so a flood of any class
+# (even one tier 1 treats as transient noise) is counted. Guards against the tier 1
+# exclusion list hiding a sustained incident. Only the classes that are never errors
+# (volume_check.noise_exclusions) are dropped.
 resource "google_logging_metric" "kyverno_error_volume" {
   count = local.kyverno_enabled && try(var.kyverno.volume_check.enabled, false) ? 1 : 0
 

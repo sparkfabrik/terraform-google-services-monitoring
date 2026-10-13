@@ -115,10 +115,12 @@ variable "kyverno" {
         "http2: client connection lost",
         "use of closed network connection",
         "failed to delete ephemeral report",
+        # Kyverno 1.17+ cleanup controller: a DeletingPolicy kept a resource (not an error).
+        "policy did not match",
       ])
     }), {})
 
-    # Tier 2 — volume catch-all: same source as tier 1, no exclusions, minus the engine logger.
+    # Tier 2 — volume catch-all: same source as tier 1 without the tier 1 exclusions, minus the engine logger.
     # threshold > value per alignment_period sustained for duration (default > 10/min for 15 min).
     volume_check = optional(object({
       enabled            = optional(bool, true)
@@ -126,6 +128,13 @@ variable "kyverno" {
       alignment_period   = optional(number, 60)
       duration           = optional(number, 900)
       auto_close_seconds = optional(number, 3600)
+      # Classes excluded from tier 2, matched on jsonPayload.message OR jsonPayload.error.
+      # Only messages that are never errors, whatever their volume; transient classes
+      # belong in service_errors_check.noise_exclusions so tier 2 still catches their floods.
+      noise_exclusions = optional(list(string), [
+        # Kyverno 1.17+ cleanup controller: a DeletingPolicy kept a resource (not an error).
+        "policy did not match",
+      ])
     }), {})
 
     # Engine — broken policies: engine-logger ERROR logs, one incident per policy.

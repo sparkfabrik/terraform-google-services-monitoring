@@ -57,7 +57,8 @@ module "example" {
     # engine alert are all enabled by default. Thresholds can be overridden per check,
     # and the tier-1 noise exclusions extended:
     # service_errors_check = { threshold = 5, noise_exclusions = ["connection refused"] }
-    # volume_check         = { threshold = 10 }
+    # The tier-2 volume catch-all drops only classes that are never errors:
+    # volume_check         = { threshold = 10, noise_exclusions = ["policy did not match"] }
     # engine_check         = { threshold = 0 }
   }
   cert_manager = {
