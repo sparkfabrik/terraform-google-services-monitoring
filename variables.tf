@@ -115,7 +115,7 @@ variable "kyverno" {
         "http2: client connection lost",
         "use of closed network connection",
         "failed to delete ephemeral report",
-        # Kyverno 1.17+ cleanup controller: a DeletingPolicy kept a resource (not an error).
+        # Cleanup controller: a DeletingPolicy kept a resource. Logged at ERROR by Kyverno <= 1.17.1 (fixed in 1.17.2).
         "policy did not match",
       ])
     }), {})
@@ -132,7 +132,7 @@ variable "kyverno" {
       # Only messages that are never errors, whatever their volume; transient classes
       # belong in service_errors_check.noise_exclusions so tier 2 still catches their floods.
       noise_exclusions = optional(list(string), [
-        # Kyverno 1.17+ cleanup controller: a DeletingPolicy kept a resource (not an error).
+        # Cleanup controller: a DeletingPolicy kept a resource. Logged at ERROR by Kyverno <= 1.17.1 (fixed in 1.17.2).
         "policy did not match",
       ])
     }), {})

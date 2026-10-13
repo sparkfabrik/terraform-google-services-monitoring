@@ -14,7 +14,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Kyverno tier 1 alert no longer fires on the `policy did not match` ERROR logs that the Kyverno 1.17 cleanup controller writes whenever a `DeletingPolicy` keeps a resource.
+- Kyverno tier 1 alert no longer fires on the `policy did not match` logs that the cleanup controller of Kyverno 1.17.1 and earlier wrongly writes at ERROR level whenever a `DeletingPolicy` keeps a resource (fixed upstream in Kyverno 1.17.2).
 
 ## [0.24.0] - 2026-09-21
 
