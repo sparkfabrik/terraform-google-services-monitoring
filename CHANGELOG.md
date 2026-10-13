@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-13
+
+[Compare with previous version](https://github.com/sparkfabrik/terraform-google-services-monitoring/compare/0.24.0...0.25.0)
+
 ### Added
 
 - `kyverno.volume_check.noise_exclusions` (default `["policy did not match"]`): non-error messages ignored by the tier 2 volume alert, kept separate from the tier 1 list so tier 2 still counts floods of transient errors.
